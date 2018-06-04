@@ -1,0 +1,17 @@
+package: github.com/daiguadaidai/go-d-bus
+import:
+- package: github.com/go-sql-driver/mysql
+  version: ~1.4.0
+- package: github.com/jinzhu/gorm
+  version: ~1.9.1
+- package: github.com/juju/errors
+- package: github.com/mitchellh/go-homedir
+- package: github.com/ngaut/log
+- package: github.com/spf13/cobra
+  version: ~0.0.3
+- package: github.com/spf13/viper
+  version: ~1.0.2
+testImport:
+- package: github.com/outbrain/golib
+  subpackages:
+  - log

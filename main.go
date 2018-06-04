@@ -14,7 +14,7 @@
 
 package main
 
-import "go-d-bus/cmd"
+import "github.com/daiguadaidai/go-d-bus/cmd"
 
 func main() {
 	cmd.Execute()
