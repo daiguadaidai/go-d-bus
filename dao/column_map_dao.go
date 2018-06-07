@@ -2,14 +2,14 @@ package dao
 
 import (
     "github.com/daiguadaidai/go-d-bus/model"
-    "github.com/daiguadaidai/go-d-bus/sql"
+    "github.com/daiguadaidai/go-d-bus/gdbc"
     "github.com/jinzhu/gorm"
 )
 
 type ColumnMapDao struct{}
 
 func (this *ColumnMapDao) FindByTaskUUID(taskUUID string, columnStr string) ([]model.ColumnMap, error) {
-    ormInstance := sql.GetOrmInstance()
+    ormInstance := gdbc.GetOrmInstance()
 
     columnMaps := []model.ColumnMap{}
     err := ormInstance.DB.Select(columnStr).Where("task_uuid = ?", taskUUID).Find(&columnMaps).Error

@@ -28,7 +28,7 @@ type DynamicInstanceMap struct {
  */
 func SetDynamicConfig(_dbConfig *setting.DBConfig) error {
     if _dbConfig == nil {
-        return errors.New("配置文件不能为 nil")
+        return errors.New("配置文件不能为 nil\n")
     }
 
     dynamicKey := _dbConfig.GetHostPortKey()
@@ -104,7 +104,8 @@ func GetDynamicInstance(_dynamicKey string) (*DynamicInstance, error) {
         // 获取数据库实例配置信息
         dynamicConfig, ok := GetDynamicConfig(_dynamicKey)
         if !ok {
-            return nil, errors.New("获取动态实例失败, 没有找到相关的实例配置信息")
+            errMsg := fmt.Sprintf("获取动态实例失败, 没有找到相关的实例配置信息, %v\n", _dynamicKey)
+            return nil, errors.New(errMsg)
         }
 
         // 实例化元数据库实例
@@ -116,11 +117,11 @@ func GetDynamicInstance(_dynamicKey string) (*DynamicInstance, error) {
             var err error
             dynamicInstance = new(DynamicInstance)
 
-            log.Infof("数据库链接描述符: %v", dynamicConfig.GetDataSource())
+            log.Infof("数据库链接描述符: %v\n", dynamicConfig.GetDataSource())
 
             dynamicInstance.DB, err = sql.Open("mysql", dynamicConfig.GetDataSource())
             if err != nil { // 打开数据库失败
-                log.Errorf("打开动态数据库实例错误, key:%v, %v", _dynamicKey, err)
+                log.Errorf("打开动态数据库实例错误, key:%v, %v\n", _dynamicKey, err)
                 return
             }
 
@@ -133,7 +134,7 @@ func GetDynamicInstance(_dynamicKey string) (*DynamicInstance, error) {
 
         // 创建动态实例失败
         if dynamicInstance == nil {
-            return nil, errors.New("获取动态实例失败, 不能创建动态实例")
+            return nil, errors.New("获取动态实例失败, 不能创建动态实例\n")
         }
     } else { // 将动态实例接口类型转化成动态实例类型
         dynamicInstance = dynamicInstanceInterface.(interface{}).(*DynamicInstance)

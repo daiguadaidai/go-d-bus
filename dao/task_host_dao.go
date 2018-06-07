@@ -2,14 +2,14 @@ package dao
 
 import (
     "github.com/daiguadaidai/go-d-bus/model"
-    "github.com/daiguadaidai/go-d-bus/sql"
     "github.com/jinzhu/gorm"
+    "github.com/daiguadaidai/go-d-bus/gdbc"
 )
 
 type TaskHostDao struct{}
 
 func (this *TaskHostDao) GetByID(id int64, columnStr string) (*model.TaskHost, error) {
-    ormInstance := sql.GetOrmInstance()
+    ormInstance := gdbc.GetOrmInstance()
 
     taskHost := new(model.TaskHost)
     err := ormInstance.DB.Select(columnStr).Where("id = ?", id).First(taskHost).Error
@@ -24,7 +24,7 @@ func (this *TaskHostDao) GetByID(id int64, columnStr string) (*model.TaskHost, e
 }
 
 func (this *TaskHostDao) GetLeastAvailable(idc string, columnStr string) (*model.TaskHost, error) {
-    ormInstance := sql.GetOrmInstance()
+    ormInstance := gdbc.GetOrmInstance()
 
     taskHost := new(model.TaskHost)
     err := ormInstance.DB.Select(columnStr).Where("idc = ? AND is_available=1", idc).Order("curr_process_cnt ASC").First(taskHost).Error
@@ -39,7 +39,7 @@ func (this *TaskHostDao) GetLeastAvailable(idc string, columnStr string) (*model
 }
 
 func (this *TaskHostDao) FindByHost(host string, columnStr string) ([]model.TaskHost, error) {
-    ormInstance := sql.GetOrmInstance()
+    ormInstance := gdbc.GetOrmInstance()
 
     taskHosts := []model.TaskHost{}
     err := ormInstance.DB.Select(columnStr).Where("host = ?", host).Find(&taskHosts).Error
@@ -54,7 +54,7 @@ func (this *TaskHostDao) FindByHost(host string, columnStr string) ([]model.Task
 }
 
 func (this *TaskHostDao) FindByAvailable(isAvailable int64, columnStr string) ([]model.TaskHost, error) {
-    ormInstance := sql.GetOrmInstance()
+    ormInstance := gdbc.GetOrmInstance()
 
     taskHosts := []model.TaskHost{}
     err := ormInstance.DB.Select(columnStr).Where("is_available = ?", isAvailable).Find(&taskHosts).Error
@@ -66,7 +66,7 @@ func (this *TaskHostDao) FindByAvailable(isAvailable int64, columnStr string) ([
 }
 
 func (this *TaskHostDao) FindByAvailableAndIDC(isAvailable int64, idc string, columnStr string) ([]model.TaskHost, error) {
-    ormInstance := sql.GetOrmInstance()
+    ormInstance := gdbc.GetOrmInstance()
 
     taskHosts := []model.TaskHost{}
     err := ormInstance.DB.Select(columnStr).Where("is_available = ? and idc = ?", isAvailable, idc).Find(&taskHosts).Error

@@ -4,6 +4,7 @@ import (
     "database/sql"
 
     "github.com/go-sql-driver/mysql"
+    "fmt"
 )
 
 type Target struct {
@@ -21,4 +22,8 @@ type Target struct {
 
 func (Target) TableName() string {
     return "target"
+}
+
+func (this *Target) GetHostPortStr() string {
+    return fmt.Sprintf("%v:%v", this.Host.String, this.Port.Int64)
 }

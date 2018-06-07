@@ -2,14 +2,14 @@ package dao
 
 import (
     "github.com/daiguadaidai/go-d-bus/model"
-    "github.com/daiguadaidai/go-d-bus/sql"
     "github.com/jinzhu/gorm"
+    "github.com/daiguadaidai/go-d-bus/gdbc"
 )
 
 type TargetDao struct{}
 
 func (this *TargetDao) GetByID(id int64, columnStr string) (*model.Target, error) {
-    ormInstance := sql.GetOrmInstance()
+    ormInstance := gdbc.GetOrmInstance()
 
     target := new(model.Target)
     err := ormInstance.DB.Select(columnStr).Where("id = ?", id).First(target).Error
@@ -24,7 +24,7 @@ func (this *TargetDao) GetByID(id int64, columnStr string) (*model.Target, error
 }
 
 func (this *TargetDao) GetByTaskUUID(taskUUID string, columnStr string) (*model.Target, error) {
-    ormInstance := sql.GetOrmInstance()
+    ormInstance := gdbc.GetOrmInstance()
 
     target := new(model.Target)
     err := ormInstance.DB.Select(columnStr).Where("task_uuid = ?", taskUUID).First(target).Error
@@ -39,7 +39,7 @@ func (this *TargetDao) GetByTaskUUID(taskUUID string, columnStr string) (*model.
 }
 
 func (this *TargetDao) FindByTaskUUID(taskUUID string, columnStr string) ([]model.Target, error) {
-    ormInstance := sql.GetOrmInstance()
+    ormInstance := gdbc.GetOrmInstance()
 
     targets := []model.Target{}
     err := ormInstance.DB.Select(columnStr).Where("task_uuid = ?", taskUUID).Find(&targets).Error

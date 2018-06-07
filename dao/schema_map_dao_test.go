@@ -17,3 +17,12 @@ func TestSchemaMapDao_FindByTaskUUID(t *testing.T) {
 
     fmt.Println(schemaMaps)
 }
+
+func TestSchemaMapDao_Count(t *testing.T) {
+    schemaMapDao := &SchemaMapDao{}
+
+    var taskUUID string = "20180204151900nb6VqFhl"
+    count := schemaMapDao.Count(taskUUID)
+
+    fmt.Println(count)
+}
