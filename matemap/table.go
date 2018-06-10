@@ -298,7 +298,7 @@ func (this *Table) InitTargetCreateTableSql(_targetCreateTableSql string) {
 // 初始化删除目标表语句 sql
 func (this *Table) InitTargetDropTableSql() {
 	this.targetDropTableSql = fmt.Sprintf("/* go-d-bus */DROP TABLE IF EXISTS `%v`.`%v`",
-		this.TargetSchema, this.SourceName)
+		this.TargetSchema, this.TargetName)
 }
 
 // 初始化查询第一条sql  主键/唯一键 值 sql 模板
@@ -493,9 +493,12 @@ func (this *Table) GetSelLastPKSqlTpl() string {
     return this.selLastPKSqlTpl
 }
 
-// 获取每一次查询, 最大的 主键/唯一键 数据
-func (this *Table) GetSelPerBatchMaxPKSqloTpl() string {
-    return this.selPerBatchMaxPKSqlTpl
+/* 获取每一次查询, 最大的 主键/唯一键 数据
+Params:
+    _maxRows: 查询的最大行数
+ */
+func (this *Table) GetSelPerBatchMaxPKSqloTpl(_maxRows int) string {
+    return fmt.Sprintf(this.selPerBatchMaxPKSqlTpl, _maxRows)
 }
 
 // 获取 每一批 select的数据 sql
@@ -511,7 +514,7 @@ func (this *Table) GetInsIgrBatchSqlTpl(_rowCount int) string {
     valuesPlaceholder := common.FormatValuesPlaceholder(len(this.SourceUsefulColumns),
     	_rowCount)
 
-    return fmt.Sprintf("%v%v", this.insIgrBatchSqlTpl, valuesPlaceholder)
+    return fmt.Sprintf(this.insIgrBatchSqlTpl, valuesPlaceholder)
 }
 
 /* 获取 replace into sql 模板
@@ -522,7 +525,7 @@ func (this *Table) GetRepPerBatchSqlTpl(_rowCount int) string {
 	valuesPlaceholder := common.FormatValuesPlaceholder(len(this.SourceUsefulColumns),
 		_rowCount)
 
-	return fmt.Sprintf("%v%v", this.repPerBatchSqlTpl, valuesPlaceholder)
+	return fmt.Sprintf(this.repPerBatchSqlTpl, valuesPlaceholder)
 }
 
 //  获取 update 语句
