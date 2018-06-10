@@ -3,6 +3,7 @@ package matemap
 import (
 	"testing"
 	"github.com/daiguadaidai/go-d-bus/config"
+	"github.com/liudng/godump"
 	"fmt"
 )
 
@@ -39,5 +40,16 @@ func TestInitMigrationTableMap(t *testing.T) {
     	t.Fatalf("%v", err)
 	}
 
-	fmt.Println(table)
+	godump.Dump(table)
+
+	fmt.Println(table.targetCreateTableSql)
+	fmt.Println(table.targetDropTableSql)
+	fmt.Println(table.selFirstPKSqlTpl)
+	fmt.Println(table.selLastPKSqlTpl)
+	fmt.Println(table.selPerBatchMaxPKSqlTpl)
+	fmt.Println(table.selPerBatchSqlTpl)
+	fmt.Println(table.insIgrBatchSqlTpl)
+	fmt.Println(table.repPerBatchSqlTpl)
+	fmt.Println(table.updSqlTpl)
+	fmt.Println(table.delSqlTpl)
 }

@@ -2,8 +2,8 @@ package matemap
 
 import (
 	"fmt"
-	"github.com/juju/errors"
 	"github.com/daiguadaidai/go-d-bus/common"
+	"github.com/juju/errors"
 )
 
 type Table struct {
@@ -22,18 +22,19 @@ type Table struct {
 	SourceToTargetColumnNameMap map[string]string // 源端列明映射到目标端的列明
 	TargetToSourceColumnNameMap map[string]string // 目标端列明映射到源端的列明
 
-	SourceIgnoreColumns []int    // 不进行同步的列
-	SourceUsefulColumns []int    // 最终进行语句平凑操作的列, 最终使用的列
+	SourceIgnoreColumns []int // 不进行同步的列
+	SourceUsefulColumns []int // 最终进行语句平凑操作的列, 最终使用的列
 
-	Create_table_sql         string // 创建表sql语句的模板
-	Drop_table_sql           string // 删除表语句sql
-	Sel_first_pk_sql         string // 查询第一条sql  主键/唯一键 值 sql
-	Sel_per_batch_max_pk_sql string // 每批查询表最大 主键/唯一键 值 sql
-	Sel_per_batch_sql        string // 每批查询获取数据的sql, row copy 所用
-	Ins_igr_batch_sql        string // insert ignore into 批量 sql
-	Rep_per_batch_sql        string // replace into 批量 insert 数据
-	Upd_sql                  string // update sql
-	Del_sql                  string // delete sql
+	targetCreateTableSql   string // 创建目标表sql语句的 sql
+	targetDropTableSql     string // 删除目标表语句 sql
+	selFirstPKSqlTpl       string // 查询第一条记录  主键/唯一键 值 sql 模板
+	selLastPKSqlTpl        string // 查询最后一条记录  主键/唯一键 值 sql 模板
+	selPerBatchMaxPKSqlTpl string // 每批查询表最大 主键/唯一键 值 sql 模板
+	selPerBatchSqlTpl      string // 每批查询获取数据的sql, row copy 所用 sql 模板
+	insIgrBatchSqlTpl      string // insert ignore into 批量 sql 模板
+	repPerBatchSqlTpl      string // replace into 批量 insert 数据 sql 模板
+	updSqlTpl              string // update sql 模板
+	delSqlTpl              string // delete sql 模板
 }
 
 // 初始化 源 列映射关系, 通过源列
@@ -44,10 +45,10 @@ func (this *Table) initSourceColumnIndexMap() error {
 		return errors.New(errMSG)
 	}
 
-    this.SourceColumnIndexMap = make(map[string]int)
+	this.SourceColumnIndexMap = make(map[string]int)
 
-    for i, sourceColumn := range this.SourceColumns {
-        this.SourceColumnIndexMap[sourceColumn.Name] = i
+	for i, sourceColumn := range this.SourceColumns {
+		this.SourceColumnIndexMap[sourceColumn.Name] = i
 	}
 
 	return nil
@@ -72,16 +73,16 @@ func (this *Table) initTargetColumnIndexMap() error {
 
 // 初始化 源到目标 列名的映射关系,  key:源列名, value:目标列名
 func (this *Table) initSourceToTargetColumnNameMap() error {
-    if this.SourceColumns == nil || len(this.SourceColumns) == 0 {
-        errMSG := fmt.Sprintf("失败. 初始化 源到目标 列名的映射关系, 该表没有列(源) %v.%v",
-        	this.SourceSchema, this.SourceName)
-        return errors.New(errMSG)
+	if this.SourceColumns == nil || len(this.SourceColumns) == 0 {
+		errMSG := fmt.Sprintf("失败. 初始化 源到目标 列名的映射关系, 该表没有列(源) %v.%v",
+			this.SourceSchema, this.SourceName)
+		return errors.New(errMSG)
 	}
 
 	this.SourceToTargetColumnNameMap = make(map[string]string)
 
 	for i, sourceColumn := range this.SourceColumns {
-        this.SourceToTargetColumnNameMap[sourceColumn.Name] = this.TargetColumns[i].Name
+		this.SourceToTargetColumnNameMap[sourceColumn.Name] = this.TargetColumns[i].Name
 	}
 
 	return nil
@@ -98,7 +99,7 @@ func (this *Table) initTargetToSourceColumnNameMap() error {
 	this.TargetToSourceColumnNameMap = make(map[string]string)
 
 	for i, targetColumn := range this.TargetColumns {
-		this.SourceToTargetColumnNameMap[targetColumn.Name] = this.SourceColumns[i].Name
+		this.TargetToSourceColumnNameMap[targetColumn.Name] = this.SourceColumns[i].Name
 	}
 
 	return nil
@@ -133,18 +134,17 @@ func (this *Table) InitColumnMapInfo() error {
 	return nil
 }
 
-
 /* 添加不需要的列
 Params:
     _ignoreColumnNames: 所有的列名
- */
+*/
 func (this *Table) SetSourceIgnoreColumns(_ignoreColumnNames []string) {
-    if this.SourceIgnoreColumns == nil {
-    	this.SourceIgnoreColumns = make([]int, 0, 10)
+	if this.SourceIgnoreColumns == nil {
+		this.SourceIgnoreColumns = make([]int, 0, 10)
 	}
 
-    for _, ignoreColumnName := range _ignoreColumnNames {
-        if columnIndex, ok := this.SourceColumnIndexMap[ignoreColumnName]; ok {
+	for _, ignoreColumnName := range _ignoreColumnNames {
+		if columnIndex, ok := this.SourceColumnIndexMap[ignoreColumnName]; ok {
 			this.SourceIgnoreColumns = append(this.SourceIgnoreColumns, columnIndex)
 		}
 	}
@@ -153,17 +153,322 @@ func (this *Table) SetSourceIgnoreColumns(_ignoreColumnNames []string) {
 // 初始化最终使用的字段
 func (this *Table) InitSourceUsefulColumns() {
 	if this.SourceUsefulColumns == nil {
-		fmt.Println("------------        ---------", len(this.SourceColumns), len(this.SourceIgnoreColumns))
-		this.SourceUsefulColumns = make([]int, 0, len(this.SourceColumns) - len(this.SourceIgnoreColumns))
+		this.SourceUsefulColumns = make([]int, 0, len(this.SourceColumns)-len(this.SourceIgnoreColumns))
 	}
 
 	for columnIndex, _ := range this.SourceColumns {
-        if common.HasElem(this.SourceIgnoreColumns, columnIndex) { // 该字段索引是不需要迁移的
-        	continue
+		if common.HasElem(this.SourceIgnoreColumns, columnIndex) { // 该字段索引是不需要迁移的
+			continue
 		}
 
 		this.SourceUsefulColumns = append(this.SourceUsefulColumns, columnIndex)
 	}
 }
 
+/*初始化可用的唯一键
+Params:
+    _pkColumns: 可用打 (主键/唯一键) 列名
+*/
+func (this *Table) InitSourcePKColumns(_pkColumnNames []string) {
+	if this.SourcePKColumns == nil {
+		this.SourcePKColumns = make([]int, 0, len(_pkColumnNames))
+	}
 
+	for _, pkColumnName := range _pkColumnNames {
+		sourcePKColumnIndex := this.SourceColumnIndexMap[pkColumnName]
+		this.SourcePKColumns = append(this.SourcePKColumns, sourcePKColumnIndex)
+	}
+}
+
+// 通过源主键列, 初始化目标主键列
+func (this *Table) InitTargetPKColumnsFromSource() {
+	if this.TargetPKColumns == nil {
+		this.TargetPKColumns = make([]int, 0, len(this.SourcePKColumns))
+	}
+
+	for _, sourcePKColumnIndex := range this.SourcePKColumns {
+		sourcePKColumnName := this.SourceColumns[sourcePKColumnIndex].Name
+		targetPkColumnName := this.SourceToTargetColumnNameMap[sourcePKColumnName]
+		targetPKColumnIndex := this.TargetColumnIndexMap[targetPkColumnName]
+		this.TargetPKColumns = append(this.TargetPKColumns, targetPKColumnIndex)
+	}
+}
+
+// 获取不要迁移的字段名称
+func (this *Table) FindSourceIgnoreNames() []string {
+    ignoreColumnNames := make([]string, 0, 1)
+
+    if len(this.SourceIgnoreColumns) == 0 || this.SourceIgnoreColumns == nil {
+    	return ignoreColumnNames
+	}
+
+	for _, ignoreColumnIndex := range this.SourceIgnoreColumns {
+		ignoreColumnNames = append(ignoreColumnNames, this.SourceColumns[ignoreColumnIndex].Name)
+	}
+
+	return ignoreColumnNames
+}
+
+// 获取 需要迁移的字段名称
+func (this *Table) FindUsefulColumnNames() []string {
+	sourceUsefulColumNames := make([]string, 0, 1)
+
+	for _, sourceUsefulColumIndex := range this.SourceUsefulColumns {
+		sourceUsefulColumNames = append(sourceUsefulColumNames,
+			this.SourceColumns[sourceUsefulColumIndex].Name)
+	}
+
+	return sourceUsefulColumNames
+}
+
+func (this *Table) FindTargetUsefulColumnNames() []string {
+    targetUsefulColumnNames := make([]string, 0, 1)
+
+	for _, sourceUsefulColumIndex := range this.SourceUsefulColumns {
+		sourceColumnName := this.SourceColumns[sourceUsefulColumIndex].Name
+		targetColumnName := this.SourceToTargetColumnNameMap[sourceColumnName]
+		targetUsefulColumnNames = append(targetUsefulColumnNames, targetColumnName)
+	}
+
+	return targetUsefulColumnNames
+}
+
+// 获取 源 主键/唯一键 字段名
+func (this *Table) FindSourcePKColumnNames() []string {
+    sourcePKColumNames := make([]string, 0, 1)
+
+    for _, sourcePKColumIndex := range this.SourcePKColumns {
+        sourcePKColumNames = append(sourcePKColumNames, this.SourceColumns[sourcePKColumIndex].Name)
+	}
+
+    return sourcePKColumNames
+}
+
+// 获取 目标 主键/唯一键 字段名
+func (this *Table) FindTargetPKColumnNames() []string {
+	targetPKColumNames := make([]string, 0, 1)
+
+	for _, sourcePKColumIndex := range this.SourcePKColumns {
+		sourceColumnName := this.SourceColumns[sourcePKColumIndex].Name
+		targetColumnName := this.SourceToTargetColumnNameMap[sourceColumnName]
+		targetPKColumNames = append(targetPKColumNames, targetColumnName)
+	}
+
+	return targetPKColumNames
+}
+
+// 初始化所有的sql语句模板
+func (this *Table) InitALLSqlTpl() {
+	// 初始化删除目标表语句 sql
+	this.InitTargetDropTableSql()
+
+    // 初始化查询第一条记录  主键/唯一键 值 sql 模板
+	this.InitSelFirstPKSqlTpl()
+
+	// 初始化查询最后第一条记录  主键/唯一键 值 sql 模板
+	this.InitSelLastPKSqlTpl()
+
+	// 初始化 每批查询表最大 主键/唯一键 值 sql 模板
+	this.InitSelPerBatchMaxPKSqlTpl()
+
+	// 每批查询获取数据的sql, row copy 所用 sql 模板
+	this.InitSelPerBatchSqlTpl()
+
+    // 初始化 insert ignore into 批量 sql 模板
+	this.InitInsIgrBatchSqlTpl()
+
+	// 初始化 replace into 批量 insert 数据 sql 模板
+	this.InitRepPerBatchSqlTpl()
+
+	// update sql 模板
+	this.InitUpdSqlTpl()
+
+	// delete sql 模板
+	this.InitDelSqlTpl()
+}
+
+/* 初始化目标键表语句
+Pramas:
+    _targetCreateTableSql: 目标建表sql语句
+ */
+func (this *Table) InitTargetCreateTableSql(_targetCreateTableSql string) {
+    this.targetCreateTableSql = _targetCreateTableSql
+}
+
+// 初始化删除目标表语句 sql
+func (this *Table) InitTargetDropTableSql() {
+	this.targetDropTableSql = fmt.Sprintf("/* go-d-bus */DROP TABLE IF EXISTS `%v`.`%v`",
+		this.TargetSchema, this.SourceName)
+}
+
+// 初始化查询第一条sql  主键/唯一键 值 sql 模板
+func (this *Table) InitSelFirstPKSqlTpl() {
+    selectSql := `
+        /* go-d-bus */ SELECT %v
+        FROM %v
+        ORDER BY %v
+        LIMIT 1
+    `
+
+    // 获取主键名称
+    pkColumnNames := this.FindSourcePKColumnNames()
+    // 获取 主键列组成的字符串
+    fieldsStr := common.FormatColumnNameStr(pkColumnNames)
+	// 获取 源表名
+	tableName := common.FormatTableName(this.SourceSchema, this.SourceName)
+    // 获取升序的 ORDER BY 字句
+    orderByStr := common.FormatOrderByStr(pkColumnNames, "ASC")
+
+    this.selFirstPKSqlTpl = fmt.Sprintf(selectSql, fieldsStr, tableName, orderByStr)
+}
+
+// 初始化查询最后一条sql  主键/唯一键 值 sql 模板
+func (this *Table) InitSelLastPKSqlTpl() {
+	selectSql := `
+        /* go-d-bus */ SELECT %v
+        FROM %v
+        ORDER BY %v
+        LIMIT 1
+    `
+
+	// 获取主键名称
+	pkColumnNames := this.FindSourcePKColumnNames()
+	// 获取 主键列组成的字符串
+	fieldsStr := common.FormatColumnNameStr(pkColumnNames)
+	// 获取 源表名
+	tableName := common.FormatTableName(this.SourceSchema, this.SourceName)
+	// 获取升序的 ORDER BY 字句
+	orderByStr := common.FormatOrderByStr(pkColumnNames, "DESC")
+
+	this.selLastPKSqlTpl = fmt.Sprintf(selectSql, fieldsStr, tableName, orderByStr)
+}
+
+// 初始化 每批查询表最大 主键/唯一键 值 sql 模板
+func (this *Table) InitSelPerBatchMaxPKSqlTpl() {
+    selectSql := `
+        /* go-d-bus */ SELECT %v
+        FROM (
+            SELECT %v
+            FROM %v 
+            WHERE %v
+            ORDER BY %v
+            LIMIT 0, %v
+        ) AS tmp
+        ORDER BY %v
+        LIMIT 1
+    `
+
+	// 获取主键名称
+	pkColumnNames := this.FindSourcePKColumnNames()
+	// 获取 主键列组成的字符串
+	fieldsStr := common.FormatColumnNameStr(pkColumnNames)
+	// 获取 源表名
+	tableName := common.FormatTableName(this.SourceSchema, this.SourceName)
+	// 获取 WHERE >= 字句
+	whereMoreThenStr := common.FormatWhereStr(pkColumnNames, ">=")
+	// 获取升序的 ORDER BY 字句
+	orderByAscStr := common.FormatOrderByStr(pkColumnNames, "ASC")
+	// limit 字句中的 offset值
+	limitOffsetValue := "%v"
+	// 获取降序的 ORDER BY 字句
+	orderByDescStr := common.FormatOrderByStr(pkColumnNames, "DESC")
+
+    this.selPerBatchMaxPKSqlTpl = fmt.Sprintf(selectSql, fieldsStr, fieldsStr,
+    	tableName, whereMoreThenStr, orderByAscStr, limitOffsetValue, orderByDescStr)
+}
+
+// 每批查询获取数据的sql, row copy 所用 sql 模板
+func (this *Table) InitSelPerBatchSqlTpl() {
+	selectSql := `
+        /* go-d-bus */ SELECT %v
+        FROM %v
+        WHERE (%v) >= (%v)
+            AND (%v) <= (%v)
+    `
+
+    // 获取需要迁移的字段名称
+    usefulColumnNames := this.FindUsefulColumnNames()
+	// 获取主键名称
+	pkColumnNames := this.FindSourcePKColumnNames()
+	// 获取所有需要迁移的字段 字符串
+	fieldsStr := common.FormatColumnNameStr(usefulColumnNames)
+	// 获取 源表名
+	tableName := common.FormatTableName(this.SourceSchema, this.SourceName)
+	// 获取 主键字段 字符串
+	pkFieldsStr := common.FormatColumnNameStr(pkColumnNames)
+	// 获取 Where 中需要的值的占位符
+	wherePlaceholderStr := common.CreatePlaceholderByCount(len(pkColumnNames))
+
+    this.selPerBatchSqlTpl = fmt.Sprintf(selectSql, fieldsStr, tableName, pkFieldsStr,
+    	wherePlaceholderStr, pkFieldsStr, wherePlaceholderStr)
+}
+
+// 初始化 insert ignore into 批量 sql 模板
+func (this *Table) InitInsIgrBatchSqlTpl() {
+    insIgrSql := `/* go-d-bus */ INSERT IGNORE INTO %v(%v) VALUES %v`
+
+	// 获取 目标表名
+	tableName := common.FormatTableName(this.TargetSchema, this.TargetName)
+	// 获取需要迁移的字段名称
+	targetUsefulColumnNames := this.FindTargetUsefulColumnNames()
+	// 获取目标所有需要迁移的字段 字符串
+	fieldsStr := common.FormatColumnNameStr(targetUsefulColumnNames)
+	// values 之后的值, 这个值主要后面需要变成占位符, 所以先使用 %v 代替
+    valuesStr := "%v"
+
+	this.insIgrBatchSqlTpl = fmt.Sprintf(insIgrSql, tableName, fieldsStr, valuesStr)
+}
+
+// 初始化 replace into 批量 insert 数据 sql 模板
+func (this *Table) InitRepPerBatchSqlTpl() {
+	replaceSql := `/* go-d-bus */ REPLACE INTO %v(%v) VALUES %v`
+
+	// 获取 目标表名
+	tableName := common.FormatTableName(this.TargetSchema, this.TargetName)
+	// 获取需要迁移的字段名称
+	targetUsefulColumnNames := this.FindTargetUsefulColumnNames()
+	// 获取目标所有需要迁移的字段 字符串
+	fieldsStr := common.FormatColumnNameStr(targetUsefulColumnNames)
+	// values 之后的值, 这个值主要后面需要变成占位符, 所以先使用 %v 代替
+	valuesStr := "%v"
+
+	this.repPerBatchSqlTpl = fmt.Sprintf(replaceSql, tableName, fieldsStr, valuesStr)
+}
+
+// update sql 模板
+func (this *Table) InitUpdSqlTpl() {
+    updateSql := `
+        /* go-d-bus */ UPDATE %v
+        SET %v
+        WHERE %v
+    `
+
+	// 获取 目标表名
+	tableName := common.FormatTableName(this.TargetSchema, this.TargetName)
+	// 获取需要迁移的字段名称
+	targetUsefulColumnNames := this.FindTargetUsefulColumnNames()
+	// 获取主键名称
+	targetPKColumnNames := this.FindTargetPKColumnNames()
+
+	// 获取目标所有需要迁移的字段 字符串
+	setFieldsStr := common.FormatSetStr(targetUsefulColumnNames)
+	// 获取 主键字段 字符串
+	whereStr := common.FormatWhereStr(targetPKColumnNames, "=")
+
+	this.updSqlTpl = fmt.Sprintf(updateSql, tableName, setFieldsStr, whereStr)
+}
+
+// delete sql 模板
+func (this *Table) InitDelSqlTpl() {
+    deleteSql := "/* go-d-bus */ DELETE FROM %v WHERE %v"
+
+	// 获取 目标表名
+	tableName := common.FormatTableName(this.TargetSchema, this.TargetName)
+	// 获取主键名称
+	targetPKColumnNames := this.FindTargetPKColumnNames()
+
+	// 获取 主键字段 字符串
+	whereStr := common.FormatWhereStr(targetPKColumnNames, "=")
+
+	this.delSqlTpl = fmt.Sprintf(deleteSql, tableName, whereStr)
+}
