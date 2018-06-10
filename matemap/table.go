@@ -472,3 +472,65 @@ func (this *Table) InitDelSqlTpl() {
 
 	this.delSqlTpl = fmt.Sprintf(deleteSql, tableName, whereStr)
 }
+
+// 获得创建目标表语句
+func (this *Table) GetTargetCreateTableSql() string {
+    return this.targetCreateTableSql
+}
+
+// 获取删除目标表语句
+func (this *Table) GetTargetDropTableSql() string {
+    return this.targetDropTableSql
+}
+
+// 获取 第一条 主键/唯一键 数据
+func (this *Table) GetSelFirstPKSqlTpl() string {
+    return this.selFirstPKSqlTpl
+}
+
+// 获取 最后一条 主键/唯一键 数据
+func (this *Table) GetSelLastPKSqlTpl() string {
+    return this.selLastPKSqlTpl
+}
+
+// 获取每一次查询, 最大的 主键/唯一键 数据
+func (this *Table) GetSelPerBatchMaxPKSqloTpl() string {
+    return this.selPerBatchMaxPKSqlTpl
+}
+
+// 获取 每一批 select的数据 sql
+func (this *Table) GetSelPerBatchSqlTpl() string {
+    return this.selPerBatchSqlTpl
+}
+
+/*获取 insert ignore sql模板
+Params:
+    _rowCount: 行数
+*/
+func (this *Table) GetInsIgrBatchSqlTpl(_rowCount int) string {
+    valuesPlaceholder := common.FormatValuesPlaceholder(len(this.SourceUsefulColumns),
+    	_rowCount)
+
+    return fmt.Sprintf("%v%v", this.insIgrBatchSqlTpl, valuesPlaceholder)
+}
+
+/* 获取 replace into sql 模板
+Params:
+    _rowCount: 行数
+ */
+func (this *Table) GetRepPerBatchSqlTpl(_rowCount int) string {
+	valuesPlaceholder := common.FormatValuesPlaceholder(len(this.SourceUsefulColumns),
+		_rowCount)
+
+	return fmt.Sprintf("%v%v", this.repPerBatchSqlTpl, valuesPlaceholder)
+}
+
+//  获取 update 语句
+func (this *Table) GetUpdSqlTpl() string {
+    return this.updSqlTpl
+}
+
+// 获取 delete sql 语句
+func (this *Table) GetDelSqlTpl() string {
+    return this.delSqlTpl
+}

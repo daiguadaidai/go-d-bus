@@ -157,3 +157,20 @@ func CreatePlaceholderByCount(_count int) string {
 
 	return strings.Join(placeholders, ", ")
 }
+
+/* 获取 Insert 语句的 在为符
+(?, ?, ?), (?, ?, )
+Params:
+    _columnLenth: 列的个数
+    _rowCount: 需要多少行
+ */
+func FormatValuesPlaceholder(_columnLenth int, _rowCount int) string {
+	valueRows := make([]string, _rowCount)
+
+	for i := 0; i < _rowCount; i++ {
+		valueRow := fmt.Sprintf("(%v)", CreatePlaceholderByCount(_columnLenth))
+		valueRows[i] = valueRow
+	}
+
+	return strings.Join(valueRows, ", ")
+}
