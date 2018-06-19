@@ -72,7 +72,8 @@ func (this *ConfigMap) InitRunQuota() error {
 		return err
 	}
 	if task == nil {
-		errMsg := fmt.Sprintf("没有找到相关的默认运行参数. task UUID: %v", this.TaskUUID)
+		errMsg := fmt.Sprintf("%v: 没有找到相关的默认运行参数. task UUID: %v",
+			common.CurrLine(), this.TaskUUID)
 		return errors.New(errMsg)
 	}
 
@@ -90,14 +91,15 @@ func (this *ConfigMap) InitSource() error {
 		return err
 	}
 	if source == nil {
-		errMsg := fmt.Sprintf("没有找到源实例信息. task UUID: %v", this.TaskUUID)
+		errMsg := fmt.Sprintf("%v: 没有找到源实例信息. task UUID: %v",
+			common.CurrLine(), this.TaskUUID)
 		return errors.New(errMsg)
 	}
 
 	source.Password.String, err = common.Decrypt(source.Password.String)
 	if err != nil {
-		errMsg := fmt.Sprintf("实例密码解密失败: %v. task UUID: %v",
-			err, this.TaskUUID)
+		errMsg := fmt.Sprintf("%v: 实例密码解密失败: %v. task UUID: %v",
+			common.CurrLine(), err, this.TaskUUID)
 		return errors.New(errMsg)
 	}
 
@@ -115,14 +117,15 @@ func (this *ConfigMap) InitTarget() error {
 		return err
 	}
 	if target == nil {
-		errMsg := fmt.Sprintf("没有找到目标实例信息. task UUID: %v", this.TaskUUID)
+		errMsg := fmt.Sprintf("%v: 没有找到目标实例信息. task UUID: %v",
+			common.CurrLine(), this.TaskUUID)
 		return errors.New(errMsg)
 	}
 
 	target.Password.String, err = common.Decrypt(target.Password.String)
 	if err != nil {
-		errMsg := fmt.Sprintf("实例密码解密失败: %v. task UUID: %v",
-			err, this.TaskUUID)
+		errMsg := fmt.Sprintf("%v: 实例密码解密失败: %v. task UUID: %v",
+			common.CurrLine(), err, this.TaskUUID)
 		return errors.New(errMsg)
 	}
 
@@ -264,21 +267,24 @@ func NewConfigMap(_taskUUID string) (*ConfigMap, error) {
 		return nil, err
 	}
 	if !exists {
-		errMsg := fmt.Sprintf("在任务中没有找到指定的任务, Task UUID: %v\n", _taskUUID)
+		errMsg := fmt.Sprintf("%v: 在任务中没有找到指定的任务, Task UUID: %v",
+			common.CurrLine(), _taskUUID)
 		return nil, errors.New(errMsg)
 	}
 
 	// 判断 有没有需要迁移的 schema
 	exists = configMap.SchemaMapExists()
 	if !exists {
-		errMsg := fmt.Sprintf("在任务中没有需要迁移的 schema, Task UUID: %v\n", _taskUUID)
+		errMsg := fmt.Sprintf("%v: 在任务中没有需要迁移的 schema, Task UUID: %v",
+			common.CurrLine(), _taskUUID)
 		return nil, errors.New(errMsg)
 	}
 
 	// 判断 有没有需要迁移的 Table
 	exists = configMap.TableMapExists()
 	if !exists {
-		errMsg := fmt.Sprintf("在任务中没有需要迁移的 table, Task UUID: %v\n", _taskUUID)
+		errMsg := fmt.Sprintf("%v: 在任务中没有需要迁移的 table, Task UUID: %v",
+			common.CurrLine(), _taskUUID)
 		return nil, errors.New(errMsg)
 	}
 

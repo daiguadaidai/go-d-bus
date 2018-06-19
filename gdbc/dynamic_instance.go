@@ -7,8 +7,9 @@ import (
 
     "github.com/daiguadaidai/go-d-bus/setting"
     "github.com/juju/errors"
-    "github.com/ngaut/log"
     _ "github.com/go-sql-driver/mysql"
+    "github.com/outbrain/golib/log"
+    "github.com/daiguadaidai/go-d-bus/common"
 )
 
 var dynamicConfigMap sync.Map
@@ -117,11 +118,12 @@ func GetDynamicInstance(_dynamicKey string) (*DynamicInstance, error) {
             var err error
             dynamicInstance = new(DynamicInstance)
 
-            log.Infof("数据库链接描述符: %v\n", dynamicConfig.GetDataSource())
+            log.Infof("%v: 数据库链接描述符: %v", common.CurrLine(), dynamicConfig.GetDataSource())
 
             dynamicInstance.DB, err = sql.Open("mysql", dynamicConfig.GetDataSource())
             if err != nil { // 打开数据库失败
-                log.Errorf("打开动态数据库实例错误, key:%v, %v\n", _dynamicKey, err)
+                log.Errorf("%v: 打开动态数据库实例错误, key:%v, %v", common.CurrLine(),
+                    _dynamicKey, err)
                 return
             }
 
@@ -134,7 +136,7 @@ func GetDynamicInstance(_dynamicKey string) (*DynamicInstance, error) {
 
         // 创建动态实例失败
         if dynamicInstance == nil {
-            return nil, errors.New("获取动态实例失败, 不能创建动态实例\n")
+            return nil, errors.New("获取动态实例失败, 不能创建动态实例")
         }
     } else { // 将动态实例接口类型转化成动态实例类型
         dynamicInstance = dynamicInstanceInterface.(interface{}).(*DynamicInstance)

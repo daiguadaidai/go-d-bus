@@ -6,7 +6,8 @@ import (
     "github.com/daiguadaidai/go-d-bus/setting"
     _ "github.com/go-sql-driver/mysql"
     "github.com/jinzhu/gorm"
-    "github.com/ngaut/log"
+    "github.com/daiguadaidai/go-d-bus/common"
+    "github.com/outbrain/golib/log"
 )
 
 var ormInstance *OrmInstance
@@ -28,7 +29,7 @@ func GetOrmInstance() *OrmInstance {
             var err error
             ormInstance.DB, err = gorm.Open("mysql", dbConfig.GetDataSource())
             if err != nil {
-                log.Errorf("打开ORM数据库实例错误, %v", err)
+                log.Error("%v: 打开ORM数据库实例错误, %v", common.CurrLine(), err)
             }
 
             ormInstance.DB.DB().SetMaxOpenConns(dbConfig.MaxOpenConns)

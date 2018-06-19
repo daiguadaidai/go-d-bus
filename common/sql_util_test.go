@@ -45,8 +45,8 @@ func TestFormatTableName(t *testing.T) {
 
 func TestCreateWherePlaceholder(t *testing.T) {
 	count := 4
-	fmt.Println(CreateWherePlaceholder(count))
+	fmt.Println(CreatePlaceholderByCount(count))
 
 	count = 1
-	fmt.Println(CreateWherePlaceholder(count))
+	fmt.Println(CreatePlaceholderByCount(count))
 }

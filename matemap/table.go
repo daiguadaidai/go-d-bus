@@ -40,8 +40,8 @@ type Table struct {
 // 初始化 源 列映射关系, 通过源列
 func (this *Table) initSourceColumnIndexMap() error {
 	if this.SourceColumns == nil || len(this.SourceColumns) == 0 {
-		errMSG := fmt.Sprintf("失败, 初始化 源 列名和位置信息. 该表没有列(源) %v.%v",
-			this.SourceSchema, this.SourceName)
+		errMSG := fmt.Sprintf("失败, 初始化 源 列名和位置信息. 该表没有列(源) %v.%v %v",
+			this.SourceSchema, this.SourceName, common.CurrLine())
 		return errors.New(errMSG)
 	}
 
@@ -57,8 +57,8 @@ func (this *Table) initSourceColumnIndexMap() error {
 // 初始化 目标 列映射关系, 通过目标列
 func (this *Table) initTargetColumnIndexMap() error {
 	if this.TargetColumns == nil || len(this.TargetColumns) == 0 {
-		errMSG := fmt.Sprintf("失败, 初始化 失败 列名和位置信息. 该表没有列(目标) %v.%v",
-			this.SourceSchema, this.SourceName)
+		errMSG := fmt.Sprintf("失败, 初始化 失败 列名和位置信息. 该表没有列(目标) %v.%v %v",
+			this.SourceSchema, this.SourceName, common.CurrLine())
 		return errors.New(errMSG)
 	}
 

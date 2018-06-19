@@ -37,3 +37,12 @@ func (this *TaskDao) GetByTaskUUID(taskUUID string, columnStr string) (*model.Ta
 
     return task, nil
 }
+
+func (this *TaskDao) Count(_taskUUID string) int {
+    ormInstance := gdbc.GetOrmInstance()
+
+    count := 0
+    ormInstance.DB.Model(&model.Task{}).Where("task_uuid = ?", _taskUUID).Count(&count)
+
+    return count
+}

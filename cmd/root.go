@@ -18,26 +18,79 @@ import (
 	"fmt"
 	"os"
 
-	homedir "github.com/mitchellh/go-homedir"
 	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
+	"github.com/daiguadaidai/go-d-bus/parser"
+	"github.com/outbrain/golib/log"
+	"github.com/daiguadaidai/go-d-bus/service"
+	"github.com/liudng/godump"
 )
 
-var cfgFile string
+var runParser *parser.RunParser
 
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
 	Use:   "go-d-bus",
-	Short: "A brief description of your application",
-	Long: `A longer description that spans multiple lines and likely contains
-examples and usage of using your application. For example:
+	Short: "MySQL异构数据迁移工具",
+	Long: `
+    一款基于 Go 开发的 MySQL 异构数据迁移一工具.
+    该迁移工具模拟了 MySQL Slave 行为 对数据进行迁移.
+    `,
+}
 
-Cobra is a CLI library for Go that empowers applications.
-This application is a tool to generate the needed files
-to quickly create a Cobra application.`,
+// 启动一个迁移任务, runCmd 是 rootCmd 的一个子命令
+var runCmd = &cobra.Command{
+	Use:   "run",
+	Short: "启动一个迁移任务",
+	Long: `用于启动一个迁移任务:
+
+./go-d-bus run --task-uuid=20180204151900nb6VqFhl
+
+./go-d-bus run \
+    --task-uuid=20180204151900nb6VqFhl \
+    --start-log-file=mysql-bin.0000001 \
+    --start-log-pos=120 \
+    --stop-log-file=mysql-bin.0000002 \
+    --stop-log-pos=0 \
+    --enable-apply-binlog=true \
+    --enable-row-copy=true \
+    --apply-binlog-paraller=8 \
+    --row-copy-paraller=8 \
+    --binlog-apply-water-mark=10000 \
+    --row-copy-water-mark=100 \
+    --heartbeat-schema=dbmonitor \
+    --heartbeat-table=heartbeat_table
+    
+    `,
 	// Uncomment the following line if your bare application
 	// has an action associated with it:
-	//	Run: func(cmd *cobra.Command, args []string) { },
+	Run: func(cmd *cobra.Command, args []string) {
+		// 检测命令行输入的参数
+		err := runParser.Parse()
+		if err != nil {
+			log.Fatalf("%v", err)
+		}
+
+		godump.Dump(runParser)
+
+		// 开始迁移
+		service.StartMigration(runParser)
+
+	},
+}
+
+// 用于回滚数据, rollbackCmd 是 rootCmd 的一个子命令
+var rollbackCmd = &cobra.Command{
+	Use:   "rollback",
+	Short: "回滚数据",
+	Long: ` 
+    回滚数据是基于binlog进行的, 数据流向: (目标 -> 源):
+    go-d-bus rollback
+    `,
+	// Uncomment the following line if your bare application
+	// has an action associated with it:
+	Run: func(cmd *cobra.Command, args []string) {
+
+	},
 }
 
 // Execute adds all child commands to the root command and sets flags appropriately.
@@ -50,40 +103,44 @@ func Execute() {
 }
 
 func init() {
-	cobra.OnInitialize(initConfig)
+	// 添加 run, rollabck 子命令
+	rootCmd.AddCommand(runCmd, rollbackCmd)
 
-	// Here you will define your flags and configuration settings.
-	// Cobra supports persistent flags, which, if defined here,
-	// will be global for your application.
-	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.go-d-bus.yaml)")
+    // 接收 run 命令 flags
+    runParser = new(parser.RunParser)
+    runCmd.Flags().StringVar(&runParser.TaskUUID, "task-uuid", "",
+    	"需要运行的任务 UUID")
 
-	// Cobra also supports local flags, which will only run
-	// when this action is called directly.
-	rootCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
-}
+	runCmd.Flags().StringVar(&runParser.StartLogFile, "start-log-file", "",
+		"运行任务开始应用 binlog 的文件")
+	runCmd.Flags().IntVar(&runParser.StartLogPos, "start-log-pos", -1,
+		"运行任务开始应用 binlog 的位点")
 
-// initConfig reads in config file and ENV variables if set.
-func initConfig() {
-	if cfgFile != "" {
-		// Use config file from the flag.
-		viper.SetConfigFile(cfgFile)
-	} else {
-		// Find home directory.
-		home, err := homedir.Dir()
-		if err != nil {
-			fmt.Println(err)
-			os.Exit(1)
-		}
+	runCmd.Flags().StringVar(&runParser.StopLogFile, "stop-log-file", "",
+		"任务停止应用 binlog 的文件")
+	runCmd.Flags().IntVar(&runParser.StopLogPos, "stop-log-pos", -1,
+		"任务停止应用 binlog 的位点")
 
-		// Search config in home directory with name ".go-d-bus" (without extension).
-		viper.AddConfigPath(home)
-		viper.SetConfigName(".go-d-bus")
-	}
+	runCmd.Flags().IntVar(&runParser.ApplyBinlogParaller, "apply-binlog-paraller",
+		-1, "应用binglog的并发数")
+	runCmd.Flags().IntVar(&runParser.RowCopyParaller, "row-copy-paraller",
+		-1, "进行数据拷贝(row copy)的并发数")
 
-	viper.AutomaticEnv() // read in environment variables that match
+	runCmd.Flags().BoolVar(&runParser.EnableApplyBinlog, "enable-apply-binlog",
+		true, "是否进行应用binlog")
+	runCmd.Flags().BoolVar(&runParser.EnableRowCopy, "enable-row-copy",
+		true, "是否进行数据拷贝(row copy)")
 
-	// If a config file is found, read it in.
-	if err := viper.ReadInConfig(); err == nil {
-		fmt.Println("Using config file:", viper.ConfigFileUsed())
-	}
+	runCmd.Flags().IntVar(&runParser.ApplyBinlogHighWaterMark, "binlog-apply-water-mark",
+		-1, "应用binlog队列缓存最大个数")
+	runCmd.Flags().IntVar(&runParser.RowCopyHighWaterMark, "row-copy-water-mark",
+		-1, "数据拷贝(row copy)队列缓存最大个数")
+
+	runCmd.Flags().StringVar(&runParser.HeartbeatSchema, "heartbeat-schema", "",
+		"心跳数据库")
+	runCmd.Flags().StringVar(&runParser.HeartbeatTable, "heartbeat-table", "",
+		"心跳表 该表的数据不会被应用, 主要是为了解析的位点能不段变, 应用的位点有可能不变")
+
+
+    // 接收 rollback 命令 flags
 }

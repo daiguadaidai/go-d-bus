@@ -6,7 +6,8 @@ import (
 
     "github.com/daiguadaidai/go-d-bus/setting"
     _ "github.com/go-sql-driver/mysql"
-    "github.com/ngaut/log"
+    "github.com/outbrain/golib/log"
+    "github.com/daiguadaidai/go-d-bus/common"
 )
 
 var normalInstance *NormalInstance
@@ -28,7 +29,7 @@ func GetNormalInstance() *NormalInstance {
             var err error
             normalInstance.DB, err = sql.Open("mysql", dbConfig.GetDataSource())
             if err != nil {
-                log.Errorf("打开普通数据库实例错误, %v", err)
+                log.Errorf("%v: 打开普通数据库实例错误, %v", common.CurrLine(), err)
             }
 
             normalInstance.DB.SetMaxOpenConns(dbConfig.MaxOpenConns)

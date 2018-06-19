@@ -11,7 +11,7 @@ type Task struct {
     TaskUUID        sql.NullString `gorm:"column:task_uuid;type:varchar(22);not null"`                                       // 任务UUID
     Type            sql.NullInt64  `gorm:"not null;default:1"`                                                               // 任务类型: 1.普通迁移, 2.sharding_o2m, 3.sharding_m2m
     Name            sql.NullString `gorm:"type:varchar(30)"`                                                                 // 迁移名称, 用来描述一个迁移任务
-    HeartbeatShema  sql.NullString `gorm:"column:heartbeat_shema;type:varchar(30);not null;default:'dbmonitor'"`             //心跳检测数据库
+    HeartbeatSchema sql.NullString `gorm:"column:heartbeat_schema;type:varchar(30);not null;default:'dbmonitor'"`             //心跳检测数据库
     HeartbeatTable  sql.NullString `gorm:"column:heartbeat_table;type:varchar(30);not null;default:'slave_delay_time'"`      //心跳检测表
     Pause           sql.NullString `gorm:"type:varchar(10)"`                                                                 // 暂停: NULL/immediate/normal
     RunStatus       sql.NullInt64  `gorm:"column:run_status;not null;default:4"`                                             // '1.receive(刚接收到), 2.ready, 3.running, 4.stop, 11.停滞接收, 12.停滞准备',
