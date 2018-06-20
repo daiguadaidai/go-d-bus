@@ -537,3 +537,14 @@ func (this *Table) GetUpdSqlTpl() string {
 func (this *Table) GetDelSqlTpl() string {
     return this.delSqlTpl
 }
+
+// 获取源表主键数据类型
+func (this *Table) GetSourcePKColumnTypes() []int {
+    pkColumnsTypes := make([]int, len(this.SourcePKColumns))
+
+    for i, columnIndex := range this.SourcePKColumns {
+    	pkColumnsTypes[i] = this.SourceColumns[columnIndex].Type
+	}
+
+	return pkColumnsTypes
+}

@@ -70,15 +70,14 @@ func NewRowCopy(_parser *parser.RunParser, _configMap *config.ConfigMap,
 	rowCopy.PrimaryRangeValueChan = make(chan *matemap.PrimaryRangeValue, _parser.RowCopyHighWaterMark)
 
 	// 获取 还需要生成主键范围数据的表 map: {"schema.table": PrimaryRangeValue}
-	needGetPrimaryRangeValueMap, err := GetNeedGetPrimaryRangeValueMap(_configMap.TableMapMap)
+	needGetPrimaryRangeValueMap, err := rowCopy.GetNeedGetPrimaryRangeValueMap()
 	if err != nil {
 		return nil, err
 	}
 	rowCopy.NeedGetPrimaryRangeValueMap = needGetPrimaryRangeValueMap
 
 	// 每个表当前生成生成到的主键范围 map: {"schema.table": PrimaryRangeValue}
-	currentPrimaryRangeValueMap, err := GetCurrentPrimaryRangeValueMap(
-		rowCopy.NeedGetPrimaryRangeValueMap, _configMap.TableMapMap)
+	currentPrimaryRangeValueMap, err := rowCopy.GetCurrentPrimaryRangeValueMap()
 	if err != nil {
 		return nil, err
 	}
