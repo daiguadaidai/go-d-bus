@@ -1,8 +1,10 @@
 package matemap
 
+import "github.com/daiguadaidai/go-d-bus/common"
+
 // 保存主键一个范围的值
 type PrimaryRangeValue struct {
-    TimestampHash int                    // 生成该范围数据的时间戳
+    TimestampHash string                    // 生成该范围数据的时间戳
 	Schema        string                 // 数据库名
 	Table         string                 // 表名
 	MinValue      map[string]interface{} // 一个范围最小的主键ID值
@@ -17,8 +19,12 @@ Params:
     _minValue: 最小值
     _maxValue: 最大值
  */
-func NewPrimaryRangeValue(_timestampHash int, _schema string, _table string,
+func NewPrimaryRangeValue(_timestampHash string, _schema string, _table string,
 	_minValue map[string]interface{}, _maxValue map[string]interface{}) *PrimaryRangeValue {
+
+	if _timestampHash < "0" {
+		_timestampHash = common.GetCurrentTimestampMS()
+	}
 
 	return &PrimaryRangeValue{
 		TimestampHash: _timestampHash,

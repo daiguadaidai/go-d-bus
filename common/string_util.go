@@ -3,6 +3,8 @@ package common
 import (
 	"encoding/json"
 	"github.com/outbrain/golib/log"
+	"time"
+	"fmt"
 )
 
 /* json 字符串转化成 Map
@@ -31,11 +33,12 @@ func Map2Json(_map map[string]interface{}) (string, error) {
 	return string(b), nil
 }
 
-/* 比较 mapA 是否 小于 mapB
+/* 比较 mapA 是否 >= mapB
 1. 先比较元素个数, 元素多的更大
 2. 循环 mapA 比较 mapB
 Params:
-
+    _mapA: 第一个map
+    _mapB: 第二个map
  */
 func MapAGreaterOrEqualMapB(_mapA map[string]interface{}, _mapB map[string]interface{}) bool {
 	mapALen := len(_mapA)
@@ -43,7 +46,7 @@ func MapAGreaterOrEqualMapB(_mapA map[string]interface{}, _mapB map[string]inter
     if mapALen == mapBLen { // 元素个数相等需要比较里面的值
         for keyA, valueA := range _mapA {
             if valueB, ok := _mapB[keyA]; ok { // 两个 map 中都有值
-                if GreaterOrEqual(valueA, valueB) { // valueA 小于valueB, 这是我们想要的
+                if GreaterOrEqual(valueA, valueB) { // valueA >= valueB, 这是我们想要的
 					continue
 				} else {
 					return false
@@ -138,4 +141,11 @@ func GreaterOrEqual(_dataA, _dataB interface{}) bool {
 	}
 
 	return false
+}
+
+// 获取当前时间戳 毫秒级别
+func GetCurrentTimestampMS() string {
+	t := time.Now()
+
+	return fmt.Sprintf("%v", t.Format("20060102150405123456"))
 }

@@ -85,4 +85,6 @@ func StartRowCopy(_parser *parser.RunParser, _configMap *config.ConfigMap,
 
 	rowCopy.WG.Add(1)
 	rowCopy.Start()
+
+	return nil
 }
