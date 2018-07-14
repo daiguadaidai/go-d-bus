@@ -1,6 +1,12 @@
 package matemap
 
-import "github.com/daiguadaidai/go-d-bus/common"
+import (
+	"github.com/daiguadaidai/go-d-bus/common"
+	"fmt"
+	"github.com/daiguadaidai/go-d-bus/gdbc"
+	"github.com/juju/errors"
+	"github.com/outbrain/golib/log"
+)
 
 // 保存主键一个范围的值
 type PrimaryRangeValue struct {
@@ -35,11 +41,85 @@ func NewPrimaryRangeValue(_timestampHash string, _schema string, _table string,
 	}
 }
 
-/*获取下一个PrimaryRangeValue
+/* 获取当前主键范围值的最大主键值
+通过指定的顺序主键名获取对应的主键值
 Params:
-    _lastPrimaryRangeValue: 上一个PrimaryRangeValue
+    _tablePKNames: 主键名
  */
-func GetNextPrimaryRangeValue(_lastPrimaryRangeValue *PrimaryRangeValue) *PrimaryRangeValue {
+func (this *PrimaryRangeValue) GetMaxValueSlice(_tablePKNames []string) []interface{} {
+    maxValueSlice := make([]interface{}, 0, 1)
 
-	return nil
+    for _, tablePKName := range _tablePKNames {
+    	maxValueSlice = append(maxValueSlice, this.MaxValue[tablePKName])
+	}
+
+    return maxValueSlice
+}
+
+/* 获取当前主键范围值的最小主键值
+通过指定的顺序主键名获取对应的主键值
+Params:
+    _tablePKNames: 主键名
+ */
+func (this *PrimaryRangeValue) GetMinValueSlice(_tablePKNames []string) []interface{} {
+	minValueSlice := make([]interface{}, 0, 1)
+
+	for _, tablePKName := range _tablePKNames {
+		minValueSlice = append(minValueSlice, this.MinValue[tablePKName])
+	}
+
+	return minValueSlice
+}
+
+/*获取下一个PrimaryRangeValue
+通过但前主键范围值到数据库中查找
+Params:
+    _maxRowCnt: 每次查询的行数
+    _host: 链接数据库 ip
+    _port: 链接数据库端口
+ */
+func (this *PrimaryRangeValue) GetNextPrimaryRangeValue(
+	_maxRowCnt int,
+	_host string,
+	_port int,
+) (*PrimaryRangeValue, error) {
+	// 获取表名
+	tableName := common.FormatTableName(this.Schema, this.Table, "")
+
+	// 通过表名获取相关表映射元数据信息
+	table, err := GetMigrationTable(tableName)
+	if err != nil {
+		errMSG := fmt.Sprintf("%v: 失败. 获取下一个主键范围值(获取迁移的表元数据). %v. %v",
+			common.CurrLine(), tableName, err)
+		return nil, errors.New(errMSG)
+	}
+
+	// 获取操作相关表的实例
+	instance, err := gdbc.GetDynamicInstanceByHostPort(_host, _port)
+	if err != nil {
+		errMSG := fmt.Sprintf("%v: 失败. 获取下一个主键范围值(获取数据库链接). %v. %v",
+			common.CurrLine(), tableName, err)
+		return nil, errors.New(errMSG)
+	}
+
+	// 获取该表的主键名
+	sourceTablePKNames := table.FindSourcePKColumnNames()
+	// 表当前row copy到的范围值的最大值
+	maxValueSlice := this.GetMaxValueSlice(sourceTablePKNames)
+
+	selectSql := table.GetSelPerBatchMaxPKSqlTpl(_maxRowCnt)
+	row := instance.DB.QueryRow(selectSql, maxValueSlice...)
+	nextValue, err := common.Row2Map(row, sourceTablePKNames, table.FindSourcePKColumnTypes())
+	if err != nil {
+		errMSG := fmt.Sprintf("%v: 失败. 获取表row copy 下一个主键值(row 装换map出错). %v. %v. %v",
+			common.CurrLine(), tableName, err, selectSql)
+		return nil, errors.New(errMSG)
+	}
+	log.Infof("%v: 成功. 获取表 row copy 下一个主键值, %v: %v",
+		common.CurrLine(), tableName, nextValue)
+
+	nextPrimaryRangeValue := NewPrimaryRangeValue("-1", this.Schema,
+		this.Table, this.MaxValue, nextValue)
+
+	return nextPrimaryRangeValue, nil
 }

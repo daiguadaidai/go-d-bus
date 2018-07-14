@@ -157,8 +157,9 @@ Pramas:
     _schemaName: 数据库
     _tableName: 表名
 */
-func FormatTableName(_schemaName string, _tableName string) string {
-	return fmt.Sprintf("`%v`.`%v`", _schemaName, _tableName)
+func FormatTableName(_schemaName string, _tableName string, _warpStr string) string {
+	return fmt.Sprintf("%v%v%v.%v%v%v",
+		_warpStr, _schemaName, _warpStr, _warpStr, _tableName, _warpStr)
 }
 
 /* 格式化WHERE字句
@@ -243,6 +244,8 @@ func Row2Map(_row *sql.Row, _columnNames []string, _columnTypes []int) (map[stri
 	}
 
 	// 开始生成字段数据
+	// 真的是让人摸不着头脑. 有时候 values 是 []int8, 有时候是其他基本类型,如 int, string.
+	// 同样是从数据库中查询出来的. 为啥会这样
 	for i, value := range values {
 		columnData, err := GetColumnData(value, _columnTypes[i])
 		if err != nil {
@@ -266,13 +269,40 @@ func GetColumnData(_value interface{}, _columnType int) (interface{}, error) {
 		return nil, nil
 	}
 
-	columnData := _value.([]uint8)
+	var strData string
+	switch _value.(type) {
+	case []int8:
+		strData = string(_value.([]uint8))
+	case string:
+        strData = _value.(string)
+	case int:
+		strData = fmt.Sprintf("%v", _value.(int))
+	case int8:
+		strData = fmt.Sprintf("%v", _value.(int8))
+	case int16:
+		strData = fmt.Sprintf("%v", _value.(int16))
+	case int32:
+		strData = fmt.Sprintf("%v", _value.(int32))
+	case int64:
+		strData = fmt.Sprintf("%v", _value.(int64))
+	case float64:
+		strData = strconv.FormatFloat(_value.(float64), 'E', -1, 64)
+	}
 
-	switch _columnType {
+	return String2GoValueBySqlType(strData, _columnType)
+}
+
+/* 将字符串转化成相应的类型值
+Params:
+    _value: 字符串的值
+    _sqlType: sql的类型
+ */
+func String2GoValueBySqlType(_value string, _sqlType int) (interface{}, error) {
+	switch _sqlType {
 	case MYSQL_TYPE_BIT, MYSQL_TYPE_TINYINT, MYSQL_TYPE_SMALLINT, MYSQL_TYPE_MEDIUMINT,
 		MYSQL_TYPE_INT, MYSQL_TYPE_BIGINT, MYSQL_TYPE_YEAR:
 
-		data, err := strconv.Atoi(string(columnData))
+		data, err := strconv.Atoi(_value)
 		if err != nil {
 			return nil, err
 		}
@@ -284,17 +314,42 @@ func GetColumnData(_value interface{}, _columnType int) (interface{}, error) {
 		MYSQL_TYPE_TEXT, MYSQL_TYPE_MEDIUMTEXT, MYSQL_TYPE_LONGTEXT, MYSQL_TYPE_DATE,
 		MYSQL_TYPE_TIME, MYSQL_TYPE_DATETIME, MYSQL_TYPE_TIMESTAMP, MYSQL_TYPE_JSON:
 
-        return string(columnData), nil
+		return _value, nil
 
 	case MYSQL_TYPE_FLOAT, MYSQL_TYPE_DOUBLE:
 
-		return string(columnData), nil
-
-	default:
-		errMSG := fmt.Sprintf("%v: 失败. 转化数据库字段信息出错遇到未知类型", CurrLine())
-		return nil, errors.New(errMSG)
+		return _value, nil
 	}
 
-	return nil, nil
+	errMSG := fmt.Sprintf("%v: 失败. 转化数据库字段信息出错遇到未知类型", CurrLine())
+	return -1, errors.New(errMSG)
+}
+
+/* 将sql类型转化成Golang类型
+Params:
+    _sqlType: sql对应的类型
+ */
+func SqlType2GoType(_sqlType int) (int, error) {
+	switch _sqlType {
+	case MYSQL_TYPE_BIT, MYSQL_TYPE_TINYINT, MYSQL_TYPE_SMALLINT, MYSQL_TYPE_MEDIUMINT,
+		MYSQL_TYPE_INT, MYSQL_TYPE_BIGINT, MYSQL_TYPE_YEAR:
+
+		return GO_TYPE_INT, nil
+
+	case MYSQL_TYPE_DECIMAL, MYSQL_TYPE_CHAR, MYSQL_TYPE_VARCHAR, MYSQL_TYPE_BINARY,
+		MYSQL_TYPE_VARBINARY, MYSQL_TYPE_ENUM, MYSQL_TYPE_SET, MYSQL_TYPE_TINYBLOB,
+		MYSQL_TYPE_BLOB, MYSQL_TYPE_MEDIUMBLOB, MYSQL_TYPE_LONGBLOB, MYSQL_TYPE_TINYTEXT,
+		MYSQL_TYPE_TEXT, MYSQL_TYPE_MEDIUMTEXT, MYSQL_TYPE_LONGTEXT, MYSQL_TYPE_DATE,
+		MYSQL_TYPE_TIME, MYSQL_TYPE_DATETIME, MYSQL_TYPE_TIMESTAMP, MYSQL_TYPE_JSON:
+
+		return GO_TYPE_STRING, nil
+
+	case MYSQL_TYPE_FLOAT, MYSQL_TYPE_DOUBLE:
+
+		return GO_TYPE_STRING, nil
+	}
+
+	errMSG := fmt.Sprintf("%v: 失败. 转化数据库字段信息出错遇到未知类型", CurrLine())
+	return -1, errors.New(errMSG)
 }
 

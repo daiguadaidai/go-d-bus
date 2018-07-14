@@ -64,6 +64,8 @@ func CreateColumn(_columnName string, _columnType string, _extra string, _ordina
 		column.Type = common.MYSQL_TYPE_MEDIUMINT
 	} else if strings.HasPrefix(_columnType, "int") {
 		column.Type = common.MYSQL_TYPE_INT
+	} else if strings.HasPrefix(_columnType, "bigint") {
+		column.Type = common.MYSQL_TYPE_BIGINT
 	} else if strings.HasPrefix(_columnType, "decimal") {
 		column.Type = common.MYSQL_TYPE_DECIMAL
 	} else if strings.HasPrefix(_columnType, "float") {

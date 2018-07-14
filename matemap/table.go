@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/daiguadaidai/go-d-bus/common"
 	"github.com/juju/errors"
+	"github.com/outbrain/golib/log"
 )
 
 type Table struct {
@@ -315,7 +316,7 @@ func (this *Table) InitSelFirstPKSqlTpl() {
     // 获取 主键列组成的字符串
     fieldsStr := common.FormatColumnNameStr(pkColumnNames)
 	// 获取 源表名
-	tableName := common.FormatTableName(this.SourceSchema, this.SourceName)
+	tableName := common.FormatTableName(this.SourceSchema, this.SourceName, "`")
     // 获取升序的 ORDER BY 字句
     orderByStr := common.FormatOrderByStr(pkColumnNames, "ASC")
 
@@ -336,7 +337,7 @@ func (this *Table) InitSelLastPKSqlTpl() {
 	// 获取 主键列组成的字符串
 	fieldsStr := common.FormatColumnNameStr(pkColumnNames)
 	// 获取 源表名
-	tableName := common.FormatTableName(this.SourceSchema, this.SourceName)
+	tableName := common.FormatTableName(this.SourceSchema, this.SourceName, "`")
 	// 获取升序的 ORDER BY 字句
 	orderByStr := common.FormatOrderByStr(pkColumnNames, "DESC")
 
@@ -363,7 +364,7 @@ func (this *Table) InitSelPerBatchMaxPKSqlTpl() {
 	// 获取 主键列组成的字符串
 	fieldsStr := common.FormatColumnNameStr(pkColumnNames)
 	// 获取 源表名
-	tableName := common.FormatTableName(this.SourceSchema, this.SourceName)
+	tableName := common.FormatTableName(this.SourceSchema, this.SourceName, "`")
 	// 获取 WHERE >= 字句
 	whereMoreThenStr := common.FormatWhereStr(pkColumnNames, ">=")
 	// 获取升序的 ORDER BY 字句
@@ -393,7 +394,7 @@ func (this *Table) InitSelPerBatchSqlTpl() {
 	// 获取所有需要迁移的字段 字符串
 	fieldsStr := common.FormatColumnNameStr(usefulColumnNames)
 	// 获取 源表名
-	tableName := common.FormatTableName(this.SourceSchema, this.SourceName)
+	tableName := common.FormatTableName(this.SourceSchema, this.SourceName, "`")
 	// 获取 主键字段 字符串
 	pkFieldsStr := common.FormatColumnNameStr(pkColumnNames)
 	// 获取 Where 中需要的值的占位符
@@ -408,7 +409,7 @@ func (this *Table) InitInsIgrBatchSqlTpl() {
     insIgrSql := `/* go-d-bus */ INSERT IGNORE INTO %v(%v) VALUES %v`
 
 	// 获取 目标表名
-	tableName := common.FormatTableName(this.TargetSchema, this.TargetName)
+	tableName := common.FormatTableName(this.TargetSchema, this.TargetName, "`")
 	// 获取需要迁移的字段名称
 	targetUsefulColumnNames := this.FindTargetUsefulColumnNames()
 	// 获取目标所有需要迁移的字段 字符串
@@ -424,7 +425,7 @@ func (this *Table) InitRepPerBatchSqlTpl() {
 	replaceSql := `/* go-d-bus */ REPLACE INTO %v(%v) VALUES %v`
 
 	// 获取 目标表名
-	tableName := common.FormatTableName(this.TargetSchema, this.TargetName)
+	tableName := common.FormatTableName(this.TargetSchema, this.TargetName, "`")
 	// 获取需要迁移的字段名称
 	targetUsefulColumnNames := this.FindTargetUsefulColumnNames()
 	// 获取目标所有需要迁移的字段 字符串
@@ -444,7 +445,7 @@ func (this *Table) InitUpdSqlTpl() {
     `
 
 	// 获取 目标表名
-	tableName := common.FormatTableName(this.TargetSchema, this.TargetName)
+	tableName := common.FormatTableName(this.TargetSchema, this.TargetName, "`")
 	// 获取需要迁移的字段名称
 	targetUsefulColumnNames := this.FindTargetUsefulColumnNames()
 	// 获取主键名称
@@ -463,7 +464,7 @@ func (this *Table) InitDelSqlTpl() {
     deleteSql := "/* go-d-bus */ DELETE FROM %v WHERE %v"
 
 	// 获取 目标表名
-	tableName := common.FormatTableName(this.TargetSchema, this.TargetName)
+	tableName := common.FormatTableName(this.TargetSchema, this.TargetName, "`")
 	// 获取主键名称
 	targetPKColumnNames := this.FindTargetPKColumnNames()
 
@@ -497,7 +498,7 @@ func (this *Table) GetSelLastPKSqlTpl() string {
 Params:
     _maxRows: 查询的最大行数
  */
-func (this *Table) GetSelPerBatchMaxPKSqloTpl(_maxRows int) string {
+func (this *Table) GetSelPerBatchMaxPKSqlTpl(_maxRows int) string {
     return fmt.Sprintf(this.selPerBatchMaxPKSqlTpl, _maxRows)
 }
 
@@ -547,4 +548,50 @@ func (this *Table) FindSourcePKColumnTypes() []int {
 	}
 
 	return pkColumnsTypes
+}
+
+/* 获取源表的主键MySQL对应的类型 Map
+Return:
+{
+    "id" : 1,
+    "id1": 2,
+    "id2": 3,
+}
+ */
+func (this *Table) FindSourcePKColumnTypeMap() map[string]int {
+	pkColumnsTypeMap := make(map[string]int)
+
+	for _, columnIndex := range this.SourcePKColumns {
+		pkColumnsTypeMap[this.SourceColumns[columnIndex].Name] = this.SourceColumns[columnIndex].Type
+	}
+
+	return pkColumnsTypeMap
+}
+
+/* 获取源表的主键MySQL对应的Golang类型 Map
+Return:
+{
+    "id" : 1,
+    "id1": 2,
+    "id2": 3,
+}
+ */
+func (this *Table) FindSourcePKColumnGoTypeMap() map[string]int {
+	pkColumnsTypeMap := make(map[string]int)
+
+	for _, columnIndex := range this.SourcePKColumns {
+		goType, err := common.SqlType2GoType(this.SourceColumns[columnIndex].Type)
+		if err != nil {
+			warnMSG := fmt.Sprintf("%v: 获取源表主键对应的Golang类型, " +
+				"MySQL类型 -> Golang类型出错. %v.%v: %v(%v). %v",
+				common.CurrLine(), this.SourceSchema, this.SourceName,
+				this.SourceColumns[columnIndex].Name,
+				this.SourceColumns[columnIndex].Type,
+				err)
+            log.Warningf(warnMSG)
+		}
+		pkColumnsTypeMap[this.SourceColumns[columnIndex].Name] = goType
+	}
+
+	return pkColumnsTypeMap
 }

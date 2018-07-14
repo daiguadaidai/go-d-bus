@@ -40,7 +40,7 @@ func TestFormatTableName(t *testing.T) {
 	schemaName := "schema"
 	schenaTable := "table"
 
-	fmt.Println(FormatTableName(schemaName, schenaTable))
+	fmt.Println(FormatTableName(schemaName, schenaTable, "`"))
 }
 
 func TestCreateWherePlaceholder(t *testing.T) {

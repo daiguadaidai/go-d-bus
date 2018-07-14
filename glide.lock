@@ -1,6 +1,8 @@
-hash: 81cd6b3ad7b1cb0b7f332d6e799416d4694a0aed70c56b38bb9122c3668f9fd3
-updated: 2018-06-13T11:27:36.429270252+08:00
+hash: 8b7617f1e193dd41439360db35061336833e9fe10c1adb32eacad40814a41572
+updated: 2018-07-14T23:47:32.361518033+08:00
 imports:
+- name: github.com/cevaris/ordered_map
+  version: 0efaee1733e3399a3cb88fc7d2ce340bf2e863d7
 - name: github.com/go-sql-driver/mysql
   version: d523deb1b23d913de5bdada721a6071e71283618
 - name: github.com/inconshreveable/mousetrap
@@ -27,6 +29,8 @@ imports:
   version: b5e8006cbee93ec955a89ab31e0e3ce3204f3736
 - name: google.golang.org/appengine
   version: b1f26356af11148e710935ed1ac8a7f5702c7612
+  repo: https://github.com/golang/appengine
+  vcs: git
   subpackages:
   - cloudsql
 testImports: []

@@ -10,6 +10,12 @@ import:
   version: ~0.0.3
 - package: github.com/spf13/viper
   version: ~1.0.2
+- package: google.golang.org/appengine
+  repo: https://github.com/golang/appengine
+  vcs: git
+  subpackages:
+  - cloudsql
+- package: github.com/cevaris/ordered_map
 testImport:
 - package: github.com/outbrain/golib
   subpackages:

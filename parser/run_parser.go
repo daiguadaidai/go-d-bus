@@ -16,6 +16,7 @@ const (
 	ROW_COPY_PARALLER            = 8     // 默认 row copy 并发数
 	APPLY_BINLOG_HIGH_WATER_MARK = 10000 // 默认 binlog 缓存队列大小
 	ROW_COPY_HIGH_WATER_MARK     = 100   // 默认 row copy 队列缓存大小
+	ROW_COPY_LIMIT               = 1000  // 默认 每次 row copy 行数
 	HEARTBEAT_SCHEMA             = ""    // 默认 心跳库
 	HEARTBEAT_TABLE              = ""    // 默认 心跳表
 )
@@ -38,6 +39,8 @@ type RunParser struct {
 
 	ApplyBinlogHighWaterMark int // 进行 应用 binlog 队列中最多缓存多少个值
 	RowCopyHighWaterMark     int // 进行row copy队列中最多缓存多少个值
+
+	RowCopyLimit int // 进行每次 row copy 的行数
 
 	HeartbeatSchema string // 心跳数据库
 	HeartbeatTable  string // 心跳表 该表的数据不会被应用, 主要是为了解析的位点能不段变, 应用的位点有可能不变
@@ -75,6 +78,9 @@ func (this *RunParser) Parse() error {
 	// 解析并发队列缓存大小
 	this.ParseApplyBinlogHighWaterMark()
 	this.ParseRowCopyHighWaterMark()
+
+	// 解析每次row copy行数
+	this.ParseRowCopyLimit()
 
 	// 解析 heartbeat schema 和 heartbeat table
 	if err := this.ParseHeartbeat(); err != nil {
@@ -214,9 +220,11 @@ func (this *RunParser) ParseApplyBinlogParaller() {
 		return
 	}
 
+	// 数据库中有 应用binlog的并发数
 	if task.BinlogParaller.Valid && task.BinlogParaller.Int64 > 0 {
 		log.Warningf("Apply Binlog 并发数从数据库中获取. %v %v", task.RowCopyParaller.Int64,
 			common.CurrLine())
+		this.ApplyBinlogParaller = int(task.BinlogParaller.Int64)
 		return
 	}
 
@@ -246,9 +254,11 @@ func (this *RunParser) ParseRowCopyParaller() {
 		return
 	}
 
+	// 在数据库中有 row copy 的并发数
 	if task.RowCopyParaller.Valid && task.RowCopyParaller.Int64 > 0 {
 		log.Warningf("Row copy 并发数从数据库中获取. %v %v", task.RowCopyParaller.Int64,
 			common.CurrLine())
+		this.RowCopyParaller = int(task.RowCopyParaller.Int64)
 		return
 	}
 
@@ -283,6 +293,40 @@ func (this *RunParser) ParseRowCopyHighWaterMark() {
 	// 数据库中没有则使用默认值
 	this.RowCopyHighWaterMark = ROW_COPY_HIGH_WATER_MARK
 	log.Warningf("没有输入 Row Copy 缓存大小. 使用默认值: %v %v", ROW_COPY_HIGH_WATER_MARK,
+		common.CurrLine())
+	return
+}
+
+// 解析每次 row copy 的行数
+func (this *RunParser) ParseRowCopyLimit() {
+	// 如果在命令行参数中有指定 每次row copy 的行数.
+	if this.RowCopyLimit > 0 {
+		return
+	}
+
+	// 没有指定从数据库中获取
+	taskDao := new(dao.TaskDao)
+	columnStr := "row_copy_limit"
+	task, err := taskDao.GetByTaskUUID(this.TaskUUID, columnStr)
+	if err != nil {
+		errMSG := fmt.Sprintf("失败. 解析每次row copy行数参数失败(从数据库获取数据时). "+
+			"将设置称默认值: %v %v", ROW_COPY_LIMIT, common.CurrLine())
+		log.Errorf(errMSG)
+		this.RowCopyLimit = ROW_COPY_LIMIT
+		return
+	}
+
+	// 在数据库中有 row copy 的并发数
+	if task.RowCopyLimit.Valid && task.RowCopyLimit.Int64 > 0 {
+		log.Warningf("Row copy 并发数从数据库中获取. %v %v", task.RowCopyParaller.Int64,
+			common.CurrLine())
+		this.RowCopyLimit = int(task.RowCopyLimit.Int64)
+		return
+	}
+
+	// 数据库中没有则使用默认值
+	this.RowCopyLimit = ROW_COPY_LIMIT
+	log.Warningf("无法获取到每次row copy的行数. 使用默认值: %v %v", ROW_COPY_LIMIT,
 		common.CurrLine())
 	return
 }

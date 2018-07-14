@@ -5,19 +5,95 @@ import (
 	"github.com/outbrain/golib/log"
 	"time"
 	"fmt"
+	"strings"
+	"strconv"
+	"github.com/juju/errors"
 )
 
 /* json 字符串转化成 Map
 Params:
     _json: 需要转化的json字符串
+    _typeMap: 数据库的类型
  */
-func Json2Map(_json string) (map[string]interface{}, error) {
+func Json2Map(_json string, _typeMap map[string]int) (map[string]interface{}, error) {
+	// 用于接收json转的值
 	var result map[string]interface{}
+	var err error
 
-	if err := json.Unmarshal([]byte(_json), &result); err != nil {
+	d := json.NewDecoder(strings.NewReader(_json))
+	d.UseNumber()
+
+	if err = d.Decode(&result); err != nil {
 		return nil, err
 	}
-	return result, nil
+
+	// 如果不需要进行类型转换直接返回 json -> map 的值
+	if _typeMap == nil {
+		return result, nil
+	}
+
+	// 用于最终返回的map值
+    returnRS := make(map[string]interface{})
+    for key, value := range result {
+    	switch value.(type) {
+		case string:
+			returnRS[key], err = String2ValueByType(value.(string), _typeMap[key])
+			if err != nil {
+				return nil, err
+			}
+
+		case json.Number:
+			returnRS[key], err = String2ValueByType(value.(json.Number).String(), _typeMap[key])
+			if err != nil {
+				return nil, err
+			}
+		}
+	}
+
+	return returnRS, nil
+}
+
+/* json 字符串转化成 Map 通过输入 sql的类型
+Params:
+    _json: 需要转化的json字符串
+    _sqlTypeMap: 数据库的类型
+ */
+func Json2MapBySqlType(_json string, _sqlTypeMap map[string]int) (map[string]interface{}, error) {
+	// 用于接收json转的值
+	var result map[string]interface{}
+	var err error
+
+	d := json.NewDecoder(strings.NewReader(_json))
+	d.UseNumber()
+
+	if err = d.Decode(&result); err != nil {
+		return nil, err
+	}
+
+	// 如果不需要进行类型转换直接返回 json -> map 的值
+	if _sqlTypeMap == nil {
+		return result, nil
+	}
+
+	// 用于最终返回的map值
+	returnRS := make(map[string]interface{})
+	for key, value := range result {
+		switch value.(type) {
+		case string:
+			returnRS[key], err = String2GoValueBySqlType(value.(string), _sqlTypeMap[key])
+			if err != nil {
+				return nil, err
+			}
+
+		case json.Number:
+			returnRS[key], err = String2GoValueBySqlType(value.(json.Number).String(), _sqlTypeMap[key])
+			if err != nil {
+				return nil, err
+			}
+		}
+	}
+
+	return returnRS, nil
 }
 
 /* map 转化成 json
@@ -41,6 +117,7 @@ Params:
     _mapB: 第二个map
  */
 func MapAGreaterOrEqualMapB(_mapA map[string]interface{}, _mapB map[string]interface{}) bool {
+	fmt.Println(_mapA, _mapB)
 	mapALen := len(_mapA)
 	mapBLen := len(_mapB)
     if mapALen == mapBLen { // 元素个数相等需要比较里面的值
@@ -78,7 +155,7 @@ func GreaterOrEqual(_dataA, _dataB interface{}) bool {
 		return valueA >= valueB
 	case int8:
 		valueB := _dataB.(int8)
-		return valueA >= valueB
+		return valueA >= int8(valueB)
 	case int16:
 		valueB := _dataB.(int16)
 		return valueA >= valueB
@@ -148,4 +225,45 @@ func GetCurrentTimestampMS() string {
 	t := time.Now()
 
 	return fmt.Sprintf("%v", t.Format("20060102150405123456"))
+}
+
+/* string转化称相关类型的值
+Params:
+    _value: 传入的字符串值
+    _type: 需要转化的类型
+ */
+func String2ValueByType(_value string, _type int) (interface{}, error) {
+	switch _type {
+	case GO_TYPE_INT, GO_TYPE_INT8, GO_TYPE_INT16, GO_TYPE_INT32, GO_TYPE_INT64:
+
+		data, err := strconv.Atoi(_value)
+		if err != nil {
+			return nil, err
+		}
+		return data, nil
+
+	case GO_TYPE_STRING:
+
+		return _value, nil
+
+	case GO_TYPE_FLOAT, GO_TYPE_FLOAT32, GO_TYPE_FLOAT64:
+
+		return _value, nil
+
+	case GO_TYPE_BOOL:
+
+		if strings.ToUpper(_value) == "TRUE" {
+			return true, nil
+		} else if strings.ToUpper(_value) == "FALSE" {
+			return false, nil
+		} else {
+			log.Warningf("%v: 将字符串转为化bool类型遇到(未知数据): %v," +
+				"将此数据转化为 false",
+				CurrLine(), _value)
+			return false, nil
+		}
+	}
+
+	errMSG := fmt.Sprintf("%v: 失败. 转化数据库字段信息出错遇到未知类型", CurrLine())
+	return -1, errors.New(errMSG)
 }

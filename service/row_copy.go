@@ -7,6 +7,7 @@ import (
 	"github.com/daiguadaidai/go-d-bus/matemap"
 	"github.com/daiguadaidai/go-d-bus/common"
 	"github.com/outbrain/golib/log"
+	"fmt"
 	"github.com/liudng/godump"
 )
 
@@ -77,12 +78,11 @@ func NewRowCopy(_parser *parser.RunParser, _configMap *config.ConfigMap,
 
 	// 获取 还需要生成主键范围数据的表 map: {"schema.table": true}
 	needRowCopyTableMap, err := rowCopy.GetNeedGetPrimaryRangeValueMap()
-	godump.Dump(needRowCopyTableMap)
 	if err != nil {
 		return nil, err
 	}
 	rowCopy.NeedRowCopyTableMap = needRowCopyTableMap
-	log.Infof("%v: 成功. 初始化还需要迁移的表", common.CurrLine())
+	log.Infof("%v: 成功. 初始化还需要迁移的表: %v", common.CurrLine(), needRowCopyTableMap)
 
 	// 初始化每个表最大的主键范围值, rowCopy截止的id范围 map: {"schema.table": PrimaryRangeValue}
 	// MaxPrimaryRangeValueMap map[string]*matemap.PrimaryRangeValue
@@ -132,6 +132,18 @@ func NewRowCopy(_parser *parser.RunParser, _configMap *config.ConfigMap,
 func (this *RowCopy) Start() {
 	defer this.WG.Done()
 
+	// 循环生成 row copy 需要的主键值, 并将值放入通道中PrimaryRangeValueChan
+    this.WG.Add(1)
+	go this.GeneratePrimaryRangeValue()
+
+	// 消费 PrimaryRangeValueChan 通道中的主键方位值
+	log.Infof("%v: 设置了 %v 个并发执行 row copy 操作.",
+		common.CurrLine(), this.Parser.RowCopyParaller)
+	for parallerTag := 0; parallerTag < this.Parser.RowCopyParaller; parallerTag++ {
+		this.WG.Add(1)
+		go this.ConsumePrimaryRangeValue(parallerTag)
+	}
+
 }
 
 /* 随机生成一个表的主键范围值
@@ -152,13 +164,48 @@ func (this *RowCopy) GeneratePrimaryRangeValue() {
 			this.ConfigMap.Source.Port.Int64,
         )
 
+        close(this.PrimaryRangeValueChan)
         return
 	}
 
+	// 获取该表当前的 row copy 主键值
+	currPrimaryRangeValue := this.CurrentPrimaryRangeValueMap[tableName]
 	// 获取表的下一个主键方位值
-	this.GetTableNextPrimaryRangeValue(tableName)
+	nextPrimaryRangeValue, err := currPrimaryRangeValue.GetNextPrimaryRangeValue(
+		this.Parser.RowCopyLimit,
+        this.ConfigMap.Source.Host.String,
+        int(this.ConfigMap.Source.Port.Int64))
+	if err != nil {
+		errMSG := fmt.Sprintf("%v: row copy 生成表的下一个主键值失败. 停止产生相关表主键值. %v. %v",
+			common.CurrLine(), tableName, err)
+		log.Errorf(errMSG)
+
+		close(this.PrimaryRangeValueChan)
+        return
+	}
+
+	this.PrimaryRangeValueChan <- nextPrimaryRangeValue
+
+	close(this.PrimaryRangeValueChan)
 }
 
-func (this *RowCopy) GetTableNextPrimaryRangeValue(_tableName string) *matemap.PrimaryRangeValue {
-    return nil
+/* 消费row copy 的主键值
+Params:
+    _parallerTag: 并发标签, 代表是第几个并发协程的操作
+1. 对PrimaryRangeValueChan进行循环获取,
+2. 对源表进行select 操作
+3. 将数据 insert 到目标表中
+4. 通知, 该主键范围消费完成
+ */
+func (this *RowCopy) ConsumePrimaryRangeValue(_parallerTag int) {
+    defer this.WG.Done()
+
+    log.Infof("%v: 成功. 启动第 %v 个并发进行消费", common.CurrLine(), _parallerTag)
+
+    for primaryRangeValue := range this.PrimaryRangeValueChan {
+    	godump.Dump(primaryRangeValue)
+	}
+
+	log.Infof("%v: 完成. 已经没有需要进行 row copy 的主键范围值了. 协程 %v 退出. 消费",
+		common.CurrLine(), _parallerTag)
 }

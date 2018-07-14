@@ -6,10 +6,9 @@ import (
     "fmt"
     "github.com/juju/errors"
     "strings"
-	"github.com/outbrain/golib/log"
+    "github.com/outbrain/golib/log"
     "github.com/daiguadaidai/go-d-bus/gdbc"
     "github.com/daiguadaidai/go-d-bus/dao"
-    "github.com/liudng/godump"
 )
 
 // 获取需要的所有需要生成范围ID的表
@@ -21,11 +20,11 @@ func (this *RowCopy)GetNeedGetPrimaryRangeValueMap() (map[string]bool, error) {
     needGetPrimaryRangeValueMap := make(map[string]bool)
 
     for tableName, _ := range migrationTableNameMap {
-    	if tableMap, ok := this.ConfigMap.TableMapMap[tableName]; ok { // 该表是确认要迁移的
-    	    if tableMap.RowCopyComplete.Int64 == 1 { // 该表已经row copy 完成
-    	        log.Infof("%v: 完成. 该表已经完成row copy. %v",
-    	            common.CurrLine(), tableName)
-    	        continue
+        if tableMap, ok := this.ConfigMap.TableMapMap[tableName]; ok { // 该表是确认要迁移的
+            if tableMap.RowCopyComplete.Int64 == 1 { // 该表已经row copy 完成
+                log.Infof("%v: 完成. 该表已经完成row copy. %v",
+                    common.CurrLine(), tableName)
+                continue
             }
 
             needGetPrimaryRangeValueMap[tableName] = true
@@ -37,7 +36,6 @@ func (this *RowCopy)GetNeedGetPrimaryRangeValueMap() (map[string]bool, error) {
         }
     }
 
-    godump.Dump(needGetPrimaryRangeValueMap)
     return needGetPrimaryRangeValueMap, nil
 }
 
@@ -96,7 +94,15 @@ func (this *RowCopy) GetMaxPrimaryRangeValueMap() (map[string]*matemap.PrimaryRa
                     common.CurrLine(), tableName)
 
             } else { // 在 table_map 表中已经有 row copy 截止主键值 max_id_value
-                maxPrimaryMap, err := common.Json2Map(tableMap.MaxIDValue.String)
+                table, err := matemap.GetMigrationTable(tableName)
+                if err != nil {
+                    errMSG := fmt.Sprintf("%v: 失败. 获取不到表元数据信息(获取表截止主键值). %v. %v",
+                        common.CurrLine(), tableName, err)
+                    return nil, nil, errors.New(errMSG)
+                }
+                pkTypeMap := table.FindSourcePKColumnTypeMap()
+
+                maxPrimaryMap, err := common.Json2MapBySqlType(tableMap.MaxIDValue.String, pkTypeMap)
                 if err != nil {
                     errMSG := fmt.Sprintf("%v: 失败. 初始化表: %v row copy 截止id值. json转化map. %v",
                         common.CurrLine(), tableName, err)
@@ -146,8 +152,8 @@ func (this *RowCopy) GetCurrentPrimaryRangeValueMap() (map[string]*matemap.Prima
                 // 数据库中没有该表中没有数据
                 if len(currPrimaryMap) == 0 {
                     noDataTables[tableName] = true
-                    log.Warningf("%v: 警告. 该表没有数据, 无法获取到最小主键值. 将设置为row copy 完成. %v",
-                        common.CurrLine(), tableName)
+                    log.Warningf("%v: 警告. 该表没有数据, 无法获取到最小主键值. 将设置为row copy 完成. %v. %v",
+                        common.CurrLine(), tableName, currPrimaryMap)
                     continue
                 }
 
@@ -175,8 +181,15 @@ func (this *RowCopy) GetCurrentPrimaryRangeValueMap() (map[string]*matemap.Prima
                     common.CurrLine(), tableName)
 
             } else { // 在 table_map 表中已经有当前已经完成的 row copy 主键值 curr_min_value
+                table, err := matemap.GetMigrationTable(tableName)
+                if err != nil {
+                    errMSG := fmt.Sprintf("%v: 失败. 获取不到表元数据信息(当前row copy的进度). %v. %v",
+                        common.CurrLine(), tableName, err)
+                    return nil, nil, errors.New(errMSG)
+                }
+                pkTypeMap := table.FindSourcePKColumnTypeMap()
                 // 获取当前表的已经 row copy 到的ID范围
-                currPrimaryMap, err := common.Json2Map(tableMap.CurrIDValue.String)
+                currPrimaryMap, err := common.Json2MapBySqlType(tableMap.CurrIDValue.String, pkTypeMap)
                 if err != nil {
                     errMSG := fmt.Sprintf("%v: 失败. 转换json数据. 在初始化表已经完成" +
                         "row copy主键值的时候 %v. %v",
@@ -227,6 +240,11 @@ func GetTableFirstPrimaryMap(_host string, _port int, _schema string,
     }
 
     selectSql := migrationTable.GetSelFirstPKSqlTpl() // 获取查询表第一条数据的记录 SQL
+    log.Debug(fmt.Sprintf("%v: %v, %v", common.CurrLine(),
+        migrationTable.SourceName, selectSql))
+    log.Debug(fmt.Sprintf("%v, %v, %v", migrationTable.SourceName,
+        migrationTable.FindSourcePKColumnNames(),
+        migrationTable.FindSourcePKColumnTypes()))
 
     row := instance.DB.QueryRow(selectSql)
     firstPrimaryMap, err := common.Row2Map(row, migrationTable.FindSourcePKColumnNames(),

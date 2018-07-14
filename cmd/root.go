@@ -57,6 +57,7 @@ var runCmd = &cobra.Command{
     --row-copy-paraller=8 \
     --binlog-apply-water-mark=10000 \
     --row-copy-water-mark=100 \
+    --row-copy-limit=1000 \
     --heartbeat-schema=dbmonitor \
     --heartbeat-table=heartbeat_table
     
@@ -135,6 +136,9 @@ func init() {
 		-1, "应用binlog队列缓存最大个数")
 	runCmd.Flags().IntVar(&runParser.RowCopyHighWaterMark, "row-copy-water-mark",
 		-1, "数据拷贝(row copy)队列缓存最大个数")
+
+	runCmd.Flags().IntVar(&runParser.RowCopyLimit, "row-copy-limit",
+		-1, "每次数据拷贝(row copy)的行数")
 
 	runCmd.Flags().StringVar(&runParser.HeartbeatSchema, "heartbeat-schema", "",
 		"心跳数据库")
