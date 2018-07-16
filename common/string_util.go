@@ -2,19 +2,19 @@ package common
 
 import (
 	"encoding/json"
-	"github.com/outbrain/golib/log"
-	"time"
 	"fmt"
-	"strings"
-	"strconv"
 	"github.com/juju/errors"
+	"github.com/outbrain/golib/log"
+	"strconv"
+	"strings"
+	"time"
 )
 
 /* json 字符串转化成 Map
 Params:
     _json: 需要转化的json字符串
     _typeMap: 数据库的类型
- */
+*/
 func Json2Map(_json string, _typeMap map[string]int) (map[string]interface{}, error) {
 	// 用于接收json转的值
 	var result map[string]interface{}
@@ -33,9 +33,9 @@ func Json2Map(_json string, _typeMap map[string]int) (map[string]interface{}, er
 	}
 
 	// 用于最终返回的map值
-    returnRS := make(map[string]interface{})
-    for key, value := range result {
-    	switch value.(type) {
+	returnRS := make(map[string]interface{})
+	for key, value := range result {
+		switch value.(type) {
 		case string:
 			returnRS[key], err = String2ValueByType(value.(string), _typeMap[key])
 			if err != nil {
@@ -57,7 +57,7 @@ func Json2Map(_json string, _typeMap map[string]int) (map[string]interface{}, er
 Params:
     _json: 需要转化的json字符串
     _sqlTypeMap: 数据库的类型
- */
+*/
 func Json2MapBySqlType(_json string, _sqlTypeMap map[string]int) (map[string]interface{}, error) {
 	// 用于接收json转的值
 	var result map[string]interface{}
@@ -99,7 +99,7 @@ func Json2MapBySqlType(_json string, _sqlTypeMap map[string]int) (map[string]int
 /* map 转化成 json
 Params:
     _map: 需要转化成 json 的map
- */
+*/
 func Map2Json(_map map[string]interface{}) (string, error) {
 	b, err := json.Marshal(_map)
 	if err != nil {
@@ -115,15 +115,14 @@ func Map2Json(_map map[string]interface{}) (string, error) {
 Params:
     _mapA: 第一个map
     _mapB: 第二个map
- */
+*/
 func MapAGreaterOrEqualMapB(_mapA map[string]interface{}, _mapB map[string]interface{}) bool {
-	fmt.Println(_mapA, _mapB)
 	mapALen := len(_mapA)
 	mapBLen := len(_mapB)
-    if mapALen == mapBLen { // 元素个数相等需要比较里面的值
-        for keyA, valueA := range _mapA {
-            if valueB, ok := _mapB[keyA]; ok { // 两个 map 中都有值
-                if GreaterOrEqual(valueA, valueB) { // valueA >= valueB, 这是我们想要的
+	if mapALen == mapBLen { // 元素个数相等需要比较里面的值
+		for keyA, valueA := range _mapA {
+			if valueB, ok := _mapB[keyA]; ok { // 两个 map 中都有值
+				if GreaterOrEqual(valueA, valueB) { // valueA >= valueB, 这是我们想要的
 					continue
 				} else {
 					return false
@@ -140,14 +139,14 @@ func MapAGreaterOrEqualMapB(_mapA map[string]interface{}, _mapB map[string]inter
 		return false
 	}
 
-    return true
+	return true
 }
 
 /* 比较 _dataA 是否小于 _dataB
 Params:
     _dataA: 第一个值
     _dataB: 第二个值
- */
+*/
 func GreaterOrEqual(_dataA, _dataB interface{}) bool {
 	switch valueA := _dataA.(type) {
 	case string:
@@ -197,8 +196,8 @@ func GreaterOrEqual(_dataA, _dataB interface{}) bool {
 			return true
 		} else if real(valueA) >= real(valueB) && imag(valueA) > imag(valueB) {
 			return true
-    	} else if real(valueA) > real(valueB) && imag(valueA) > imag(valueB) {
-            return true
+		} else if real(valueA) > real(valueB) && imag(valueA) > imag(valueB) {
+			return true
 		} else {
 			return false
 		}
@@ -231,7 +230,7 @@ func GetCurrentTimestampMS() string {
 Params:
     _value: 传入的字符串值
     _type: 需要转化的类型
- */
+*/
 func String2ValueByType(_value string, _type int) (interface{}, error) {
 	switch _type {
 	case GO_TYPE_INT, GO_TYPE_INT8, GO_TYPE_INT16, GO_TYPE_INT32, GO_TYPE_INT64:
@@ -257,7 +256,7 @@ func String2ValueByType(_value string, _type int) (interface{}, error) {
 		} else if strings.ToUpper(_value) == "FALSE" {
 			return false, nil
 		} else {
-			log.Warningf("%v: 将字符串转为化bool类型遇到(未知数据): %v," +
+			log.Warningf("%v: 将字符串转为化bool类型遇到(未知数据): %v,"+
 				"将此数据转化为 false",
 				CurrLine(), _value)
 			return false, nil

@@ -1,8 +1,8 @@
 package matemap
 
 import (
-	"testing"
 	"fmt"
+	"testing"
 )
 
 func TestColumnType_PrintType(t *testing.T) {

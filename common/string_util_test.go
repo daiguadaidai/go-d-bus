@@ -1,13 +1,13 @@
 package common
 
 import (
-	"testing"
 	"fmt"
+	"testing"
 )
 
 func TestJson2Map1(t *testing.T) {
 	jsonStr := "{\"address_id\":605}"
-	jsonType := map[string]int {
+	jsonType := map[string]int{
 		"address_id": GO_TYPE_INT,
 	}
 
@@ -20,7 +20,7 @@ func TestJson2Map1(t *testing.T) {
 
 func TestJson2Map2(t *testing.T) { // 这样的字符串是不行的, 测试通不过
 	jsonStr := "{'address_id':605}"
-	jsonType := map[string]int {
+	jsonType := map[string]int{
 		"address_id": GO_TYPE_INT,
 	}
 
@@ -35,8 +35,8 @@ func TestJson2Map3(t *testing.T) {
 	jsonStr := `
     {"id1":123, "name": "HH"}
     `
-	jsonType := map[string]int {
-		"id1": GO_TYPE_INT,
+	jsonType := map[string]int{
+		"id1":  GO_TYPE_INT,
 		"name": GO_TYPE_STRING,
 	}
 
@@ -48,8 +48,8 @@ func TestJson2Map3(t *testing.T) {
 }
 
 func TestMap2Json(t *testing.T) {
-	testMap := map[string]interface{} {
-		"id": 123,
+	testMap := map[string]interface{}{
+		"id":   123,
 		"Name": "HH",
 	}
 
@@ -61,12 +61,12 @@ func TestMap2Json(t *testing.T) {
 }
 
 func TestMapAGreaterOrEqualMapB(t *testing.T) {
-	mapA := map[string]interface{} {
-		"id": 110,
+	mapA := map[string]interface{}{
+		"id":   110,
 		"name": "HH",
 	}
-	mapB := map[string]interface{} {
-		"id": 111,
+	mapB := map[string]interface{}{
+		"id":   111,
 		"name": "HH",
 	}
 
@@ -77,8 +77,8 @@ func TestJson2MapBySqlType(t *testing.T) {
 	jsonStr := `
     {"id1":123, "name": "HH"}
     `
-	sqlType := map[string]int {
-		"id1": MYSQL_TYPE_BIGINT,
+	sqlType := map[string]int{
+		"id1":  MYSQL_TYPE_BIGINT,
 		"name": MYSQL_TYPE_VARCHAR,
 	}
 

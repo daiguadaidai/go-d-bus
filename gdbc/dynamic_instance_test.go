@@ -1,11 +1,11 @@
 package gdbc
 
 import (
-	"testing"
-	"github.com/daiguadaidai/go-d-bus/setting"
 	"fmt"
+	"github.com/daiguadaidai/go-d-bus/setting"
 	"github.com/outbrain/golib/log"
 	"sync"
+	"testing"
 	"time"
 )
 
@@ -28,9 +28,8 @@ func TestSetAndGetDynamicConfig(t *testing.T) {
 	// 设置DBConfig
 	err := SetDynamicConfig(dbConfig)
 	if err != nil {
-        t.Fatalf("设置数据库文件失败: %v", err)
+		t.Fatalf("设置数据库文件失败: %v", err)
 	}
-
 
 	// 获取数据库配置文件
 	dbConfig2, ok := GetDynamicConifgByHostPort(dbConfig.Host, dbConfig.Port)
@@ -41,41 +40,41 @@ func TestSetAndGetDynamicConfig(t *testing.T) {
 }
 
 func TestGetDynamicInstanceByHostPort(t *testing.T) {
-    dynamicConfig := setConfig()
+	dynamicConfig := setConfig()
 
-    wg := new(sync.WaitGroup)
+	wg := new(sync.WaitGroup)
 
-    for i:=0; i<1; i++ {
-    	wg.Add(1)
-        go func(_wg *sync.WaitGroup) {
-        	defer wg.Done()
+	for i := 0; i < 1; i++ {
+		wg.Add(1)
+		go func(_wg *sync.WaitGroup) {
+			defer wg.Done()
 
-	    	dynamicInstance, err := GetDynamicInstanceByHostPort(dynamicConfig.Host, dynamicConfig.Port)
-	    	if err != nil {
-	    		t.Fatal(err)
-	    	}
+			dynamicInstance, err := GetDynamicInstanceByHostPort(dynamicConfig.Host, dynamicConfig.Port)
+			if err != nil {
+				t.Fatal(err)
+			}
 
-	    	log.Infof("%v", dynamicInstance)
+			log.Infof("%v", dynamicInstance)
 
-	    	tx, err := dynamicInstance.DB.Begin()
+			tx, err := dynamicInstance.DB.Begin()
 
-	    	update_sql := "update test.t2 set actor_id=555 where id=40011"
+			update_sql := "update test.t2 set actor_id=555 where id=40011"
 			result, err := tx.Exec(update_sql)
 
-	    	sql := "SELECT SLEEP(60)"
-		    result, err = tx.Exec(sql)
+			sql := "SELECT SLEEP(60)"
+			result, err = tx.Exec(sql)
 
 			update_sql = "update test.t2 set actor_id=666 where id=40011"
 			result, err = tx.Exec(update_sql)
 
 			tx.Commit()
 
-		    log.Infof("%v", result)
+			log.Infof("%v", result)
 
-	    }(wg)
-    }
+		}(wg)
+	}
 
-    wg.Wait()
+	wg.Wait()
 }
 
 func TestGetDynamicInstanceByHostPort2(t *testing.T) {
@@ -83,7 +82,7 @@ func TestGetDynamicInstanceByHostPort2(t *testing.T) {
 
 	wg := new(sync.WaitGroup)
 
-	for i:=0; i<1; i++ {
+	for i := 0; i < 1; i++ {
 		wg.Add(1)
 		go func(_wg *sync.WaitGroup) {
 			defer wg.Done()
@@ -100,7 +99,6 @@ func TestGetDynamicInstanceByHostPort2(t *testing.T) {
 			result.Close()
 
 			log.Infof("%v", result)
-
 
 		}(wg)
 	}
@@ -129,7 +127,6 @@ func query(_host string, _port int) {
 	log.Infof("query: %v", result)
 
 }
-
 
 func setConfig() *setting.DBConfig {
 	dbConfig := new(setting.DBConfig)

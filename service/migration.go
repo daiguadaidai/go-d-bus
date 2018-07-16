@@ -1,10 +1,10 @@
 package service
 
 import (
-	"github.com/daiguadaidai/go-d-bus/parser"
 	"github.com/daiguadaidai/go-d-bus/config"
-	"github.com/outbrain/golib/log"
 	"github.com/daiguadaidai/go-d-bus/matemap"
+	"github.com/daiguadaidai/go-d-bus/parser"
+	"github.com/outbrain/golib/log"
 	"sync"
 )
 
@@ -12,7 +12,7 @@ func StartMigration(_parser *parser.RunParser) {
 	// 获取配置映射信息
 	configMap, err := config.NewConfigMap(_parser.TaskUUID)
 	if err != nil {
-        log.Fatalf("%v", err)
+		log.Fatalf("%v", err)
 	}
 
 	// 设置源和目标实例配置信息
@@ -57,13 +57,13 @@ Params:
     _parser: 启动参数
     _configMap: 需要迁移的表的配置映射信息
     _wg: 并发参数
- */
+*/
 func StartApplyBinlog(_parser *parser.RunParser, _configMap *config.ConfigMap,
 	_wg *sync.WaitGroup) error {
 
-    applyBinlog, err := NewApplyBinlog(_parser, _configMap, _wg)
-    if err != nil {
-        return err
+	applyBinlog, err := NewApplyBinlog(_parser, _configMap, _wg)
+	if err != nil {
+		return err
 	}
 
 	applyBinlog.WG.Add(1)

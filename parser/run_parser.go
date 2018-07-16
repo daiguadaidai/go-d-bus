@@ -1,14 +1,14 @@
 package parser
 
 import (
+	"database/sql"
 	"fmt"
+	"github.com/daiguadaidai/go-d-bus/common"
 	"github.com/daiguadaidai/go-d-bus/dao"
+	"github.com/daiguadaidai/go-d-bus/gdbc"
 	"github.com/juju/errors"
 	"github.com/outbrain/golib/log"
 	"strings"
-	"github.com/daiguadaidai/go-d-bus/gdbc"
-	"database/sql"
-	"github.com/daiguadaidai/go-d-bus/common"
 )
 
 const (
@@ -19,6 +19,7 @@ const (
 	ROW_COPY_LIMIT               = 1000  // 默认 每次 row copy 行数
 	HEARTBEAT_SCHEMA             = ""    // 默认 心跳库
 	HEARTBEAT_TABLE              = ""    // 默认 心跳表
+	ERR_RETRY_COUNT              = 60    // 默认出错重试次数
 )
 
 // 在启动一个任务时用于接收和保存 命令行输入的参数值
@@ -44,6 +45,8 @@ type RunParser struct {
 
 	HeartbeatSchema string // 心跳数据库
 	HeartbeatTable  string // 心跳表 该表的数据不会被应用, 主要是为了解析的位点能不段变, 应用的位点有可能不变
+
+	ErrRetryCount int // 当出现错误的时候默认重试次数
 }
 
 // 对输入的命令进行检测
@@ -86,6 +89,9 @@ func (this *RunParser) Parse() error {
 	if err := this.ParseHeartbeat(); err != nil {
 		return err
 	}
+
+	// 解析 出错重试次数
+	this.ParseErrRetryCount()
 
 	return nil
 }
@@ -399,16 +405,22 @@ func (this *RunParser) ParseHeartbeat() error {
 	// 数据库中没有则使用默认值,
 	this.HeartbeatSchema = HEARTBEAT_SCHEMA
 	this.HeartbeatTable = HEARTBEAT_TABLE
-	log.Warningf("没有指定, 数据库中也没有 heartbeat 相关信息, " +
+	log.Warningf("没有指定, 数据库中也没有 heartbeat 相关信息, "+
 		"该任务则不进行 heartbeat binlog 解析. %v", common.CurrLine())
 	return nil
+}
+
+func (this *RunParser) ParseErrRetryCount() {
+	if this.ErrRetryCount < 0 {
+		this.ErrRetryCount = ERR_RETRY_COUNT
+	}
 }
 
 /* 设置binlog位点信息, 通过给的实例 host, port
 Params:
     _host: 实例host
     _port: 实例port
- */
+*/
 func (this *RunParser) SetStartBinlogInfoByHostAndPort(_host string, _port int) error {
 	instance, err := gdbc.GetDynamicInstanceByHostPort(_host, _port)
 	if err != nil {
@@ -428,14 +440,14 @@ func (this *RunParser) SetStartBinlogInfoByHostAndPort(_host string, _port int) 
 	err = instance.DB.QueryRow(showSql).Scan(&file, &position, &binlogDoDB, &binlogIgnoreDB,
 		&executedGtidSet)
 	if err != nil {
-        errMSG := fmt.Sprintf("失败. 获取实例 binlog 位点信息(查询sql) %v:%v %v %v",
-        	_host, _port, err, common.CurrLine())
-        errors.New(errMSG)
+		errMSG := fmt.Sprintf("失败. 获取实例 binlog 位点信息(查询sql) %v:%v %v %v",
+			_host, _port, err, common.CurrLine())
+		errors.New(errMSG)
 	}
 
 	// 设置binlog位点信息
 	if file.Valid && position.Valid && strings.TrimSpace(file.String) != "" && int(position.Int64) > 0 {
-        this.StartLogFile = file.String
+		this.StartLogFile = file.String
 		this.StartLogPos = int(position.Int64)
 		return nil
 	}
@@ -443,5 +455,3 @@ func (this *RunParser) SetStartBinlogInfoByHostAndPort(_host string, _port int) 
 	errMSG := fmt.Sprintf("失败. 没有获得到binlog位点信息. %v:%v %v", _host, _port, common.CurrLine())
 	return errors.New(errMSG)
 }
-
-

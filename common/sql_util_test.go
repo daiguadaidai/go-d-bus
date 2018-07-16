@@ -1,8 +1,8 @@
 package common
 
 import (
-	"testing"
 	"fmt"
+	"testing"
 )
 
 func TestGetAnonymousTableName(t *testing.T) {

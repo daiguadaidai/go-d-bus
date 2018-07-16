@@ -1,12 +1,12 @@
 package common
 
 import (
+	"database/sql"
 	"fmt"
+	"github.com/juju/errors"
 	"strconv"
 	"strings"
 	"time"
-	"github.com/juju/errors"
-	"database/sql"
 )
 
 const (
@@ -231,7 +231,7 @@ func Row2Map(_row *sql.Row, _columnNames []string, _columnTypes []int) (map[stri
 	rowMap := make(map[string]interface{})
 	columnLen := len(_columnTypes)
 
-	values := make([]interface{}, columnLen) // 数据库原生二进制值
+	values := make([]interface{}, columnLen)   // 数据库原生二进制值
 	scanArgs := make([]interface{}, columnLen) // 接收数据库原生二进制值，该值和上面定义的values进行关联
 	for i := range values {
 		scanArgs[i] = &values[i]
@@ -253,7 +253,7 @@ func Row2Map(_row *sql.Row, _columnNames []string, _columnTypes []int) (map[stri
 				CurrLine(), _columnNames[i], _columnTypes[i], err)
 			return nil, errors.New(errMSG)
 		}
-        rowMap[_columnNames[i]] = columnData
+		rowMap[_columnNames[i]] = columnData
 	}
 
 	return rowMap, nil
@@ -263,7 +263,7 @@ func Row2Map(_row *sql.Row, _columnNames []string, _columnTypes []int) (map[stri
 Params:
     _value: 查询出来的原始值
     _columnType: 在数据库中的字段类型
- */
+*/
 func GetColumnData(_value interface{}, _columnType int) (interface{}, error) {
 	if _value == nil {
 		return nil, nil
@@ -274,7 +274,7 @@ func GetColumnData(_value interface{}, _columnType int) (interface{}, error) {
 	case []int8:
 		strData = string(_value.([]uint8))
 	case string:
-        strData = _value.(string)
+		strData = _value.(string)
 	case int:
 		strData = fmt.Sprintf("%v", _value.(int))
 	case int8:
@@ -296,7 +296,7 @@ func GetColumnData(_value interface{}, _columnType int) (interface{}, error) {
 Params:
     _value: 字符串的值
     _sqlType: sql的类型
- */
+*/
 func String2GoValueBySqlType(_value string, _sqlType int) (interface{}, error) {
 	switch _sqlType {
 	case MYSQL_TYPE_BIT, MYSQL_TYPE_TINYINT, MYSQL_TYPE_SMALLINT, MYSQL_TYPE_MEDIUMINT,
@@ -328,7 +328,7 @@ func String2GoValueBySqlType(_value string, _sqlType int) (interface{}, error) {
 /* 将sql类型转化成Golang类型
 Params:
     _sqlType: sql对应的类型
- */
+*/
 func SqlType2GoType(_sqlType int) (int, error) {
 	switch _sqlType {
 	case MYSQL_TYPE_BIT, MYSQL_TYPE_TINYINT, MYSQL_TYPE_SMALLINT, MYSQL_TYPE_MEDIUMINT,
@@ -352,4 +352,3 @@ func SqlType2GoType(_sqlType int) (int, error) {
 	errMSG := fmt.Sprintf("%v: 失败. 转化数据库字段信息出错遇到未知类型", CurrLine())
 	return -1, errors.New(errMSG)
 }
-

@@ -6,11 +6,11 @@ import "math/rand"
 将map的key放在一个列表中, value为true的才放
 Params:
     _data: 需要的需要的数据
- */
+*/
 func GetRandomMapKey(_data map[string]bool) (string, bool) {
 	keySlice := make([]string, 0, 10)
 	for key, value := range _data {
-        if value {
+		if value {
 			keySlice = append(keySlice, key)
 		}
 	}

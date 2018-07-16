@@ -1,8 +1,8 @@
 package matemap
 
 import (
-	"strings"
 	"github.com/daiguadaidai/go-d-bus/common"
+	"strings"
 )
 
 type Column struct {

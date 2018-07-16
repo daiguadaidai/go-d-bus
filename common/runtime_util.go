@@ -1,9 +1,9 @@
 package common
 
 import (
-	"runtime"
 	"fmt"
 	"path"
+	"runtime"
 )
 
 func CurrLine() string {

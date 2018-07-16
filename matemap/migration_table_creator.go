@@ -713,7 +713,7 @@ func DropTable(_host string, _port int, _schemaName string,
 	_, err = instance.DB.Exec(dropSql)
 	if err != nil {
 		errMSG := fmt.Sprintf("%v: 失败. 清理匿名表. %v.%v %v:%v. %v. %v",
-			 common.CurrLine(), _schemaName, _tableName, _host, _port, err, dropSql)
+			common.CurrLine(), _schemaName, _tableName, _host, _port, err, dropSql)
 		return errors.New(errMSG)
 	}
 
@@ -788,7 +788,7 @@ func DropTableColumnAndIndex(_host string, _port int, _schemaName string,
 
 // 获取需要迁移的表 map
 func FindAllMigrationTableNameMap() map[string]*MigrationTableName {
-    migrationTableNameMap := make(map[string]*MigrationTableName)
+	migrationTableNameMap := make(map[string]*MigrationTableName)
 
 	migrationTableMap.Range(func(_tableNameInterface, _tableInterface interface{}) bool {
 		table := _tableInterface.(interface{}).(*Table)
@@ -802,7 +802,7 @@ func FindAllMigrationTableNameMap() map[string]*MigrationTableName {
 		return true
 	})
 
-    return migrationTableNameMap
+	return migrationTableNameMap
 }
 
 // 记录所有需要迁移的表
@@ -822,8 +822,8 @@ func ShowAllIgnoreMigrationTableNames(_configMap *config.ConfigMap) {
 
 	log.Warningf("%v: 不满足迁移条件, 被忽略的表:", common.CurrLine())
 	for configTableName, configTable := range _configMap.TableMapMap {
-        if _, ok := migrationTableNameMap[configTableName]; !ok {
-        	targetSchema := _configMap.SchemaMapMap[configTable.Schema.String].Target.String
+		if _, ok := migrationTableNameMap[configTableName]; !ok {
+			targetSchema := _configMap.SchemaMapMap[configTable.Schema.String].Target.String
 			log.Warningf("%v: `%v`.`%v` -> `%v`.`%v`", common.CurrLine(),
 				configTable.Schema.String, configTable.Source.String, targetSchema,
 				configTable.Target.String)

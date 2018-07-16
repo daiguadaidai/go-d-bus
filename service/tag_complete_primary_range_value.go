@@ -3,7 +3,7 @@ package service
 import "github.com/daiguadaidai/go-d-bus/matemap"
 
 type TagCompletePrimaryRangeValue struct {
-	IsComplete bool
+	IsComplete        bool
 	PrimaryRangeValue *matemap.PrimaryRangeValue
 }
 
@@ -15,8 +15,8 @@ func NewTagCompletePrimaryRangeValue(
 	_primaryRangeValue *matemap.PrimaryRangeValue,
 ) *TagCompletePrimaryRangeValue {
 
-	return &TagCompletePrimaryRangeValue {
-        IsComplete: _isComplete,
-        PrimaryRangeValue: _primaryRangeValue,
+	return &TagCompletePrimaryRangeValue{
+		IsComplete:        _isComplete,
+		PrimaryRangeValue: _primaryRangeValue,
 	}
 }

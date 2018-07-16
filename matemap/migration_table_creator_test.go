@@ -1,10 +1,10 @@
 package matemap
 
 import (
-	"testing"
+	"fmt"
 	"github.com/daiguadaidai/go-d-bus/config"
 	"github.com/liudng/godump"
-	"fmt"
+	"testing"
 )
 
 func TestInitMigrationTableMap(t *testing.T) {
@@ -35,9 +35,9 @@ func TestInitMigrationTableMap(t *testing.T) {
 	// 获取表
 	schemaName := "test"
 	tableName := "store"
-    table, err := GetMigrationTableBySchemaTable(schemaName, tableName)
-    if err != nil {
-    	t.Fatalf("%v", err)
+	table, err := GetMigrationTableBySchemaTable(schemaName, tableName)
+	if err != nil {
+		t.Fatalf("%v", err)
 	}
 
 	godump.Dump(table)

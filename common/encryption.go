@@ -1,16 +1,16 @@
 package common
 
 import (
-	math_rand "math/rand"
-	"crypto/cipher"
+	"bytes"
 	"crypto/aes"
-	"encoding/hex"
+	"crypto/cipher"
 	"crypto/rand"
+	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
+	math_rand "math/rand"
 	"sync"
-	"errors"
-	"bytes"
 )
 
 func RandString(n int) string {
@@ -61,7 +61,7 @@ func Encrypt(origData string) (string, error) {
 
 	mode.CryptBlocks(encryptText[aes.BlockSize:], src)
 
-	return fmt.Sprintf("%x",string(encryptText)), nil
+	return fmt.Sprintf("%x", string(encryptText)), nil
 }
 
 // AES解密

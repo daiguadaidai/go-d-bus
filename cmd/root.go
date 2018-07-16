@@ -18,11 +18,11 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/spf13/cobra"
 	"github.com/daiguadaidai/go-d-bus/parser"
-	"github.com/outbrain/golib/log"
 	"github.com/daiguadaidai/go-d-bus/service"
 	"github.com/liudng/godump"
+	"github.com/outbrain/golib/log"
+	"github.com/spf13/cobra"
 )
 
 var runParser *parser.RunParser
@@ -107,10 +107,10 @@ func init() {
 	// 添加 run, rollabck 子命令
 	rootCmd.AddCommand(runCmd, rollbackCmd)
 
-    // 接收 run 命令 flags
-    runParser = new(parser.RunParser)
-    runCmd.Flags().StringVar(&runParser.TaskUUID, "task-uuid", "",
-    	"需要运行的任务 UUID")
+	// 接收 run 命令 flags
+	runParser = new(parser.RunParser)
+	runCmd.Flags().StringVar(&runParser.TaskUUID, "task-uuid", "",
+		"需要运行的任务 UUID")
 
 	runCmd.Flags().StringVar(&runParser.StartLogFile, "start-log-file", "",
 		"运行任务开始应用 binlog 的文件")
@@ -145,6 +145,8 @@ func init() {
 	runCmd.Flags().StringVar(&runParser.HeartbeatTable, "heartbeat-table", "",
 		"心跳表 该表的数据不会被应用, 主要是为了解析的位点能不段变, 应用的位点有可能不变")
 
+	runCmd.Flags().IntVar(&runParser.ErrRetryCount, "err-retry-count",
+		60, "错误重试次数. 默认60次")
 
-    // 接收 rollback 命令 flags
+	// 接收 rollback 命令 flags
 }

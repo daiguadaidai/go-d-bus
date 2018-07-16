@@ -1,28 +1,28 @@
 package dao
 
 import (
-    "fmt"
-    "testing"
+	"fmt"
+	"testing"
 )
 
 func TestSchemaMapDao_FindByTaskUUID(t *testing.T) {
-    schemaMapDao := &SchemaMapDao{}
+	schemaMapDao := &SchemaMapDao{}
 
-    var taskUUID string = "20180204151900nb6VqFhl"
-    var columnStr string = "*"
-    schemaMaps, err := schemaMapDao.FindByTaskUUID(taskUUID, columnStr)
-    if err != nil {
-        fmt.Println(err)
-    }
+	var taskUUID string = "20180204151900nb6VqFhl"
+	var columnStr string = "*"
+	schemaMaps, err := schemaMapDao.FindByTaskUUID(taskUUID, columnStr)
+	if err != nil {
+		fmt.Println(err)
+	}
 
-    fmt.Println(schemaMaps)
+	fmt.Println(schemaMaps)
 }
 
 func TestSchemaMapDao_Count(t *testing.T) {
-    schemaMapDao := &SchemaMapDao{}
+	schemaMapDao := &SchemaMapDao{}
 
-    var taskUUID string = "20180204151900nb6VqFhl"
-    count := schemaMapDao.Count(taskUUID)
+	var taskUUID string = "20180204151900nb6VqFhl"
+	count := schemaMapDao.Count(taskUUID)
 
-    fmt.Println(count)
+	fmt.Println(count)
 }

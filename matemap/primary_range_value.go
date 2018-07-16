@@ -1,8 +1,8 @@
 package matemap
 
 import (
-	"github.com/daiguadaidai/go-d-bus/common"
 	"fmt"
+	"github.com/daiguadaidai/go-d-bus/common"
 	"github.com/daiguadaidai/go-d-bus/gdbc"
 	"github.com/juju/errors"
 	"github.com/outbrain/golib/log"
@@ -10,7 +10,7 @@ import (
 
 // 保存主键一个范围的值
 type PrimaryRangeValue struct {
-    TimestampHash string                    // 生成该范围数据的时间戳
+	TimestampHash string                 // 生成该范围数据的时间戳
 	Schema        string                 // 数据库名
 	Table         string                 // 表名
 	MinValue      map[string]interface{} // 一个范围最小的主键ID值
@@ -24,7 +24,7 @@ Params:
     _table: 表名
     _minValue: 最小值
     _maxValue: 最大值
- */
+*/
 func NewPrimaryRangeValue(_timestampHash string, _schema string, _table string,
 	_minValue map[string]interface{}, _maxValue map[string]interface{}) *PrimaryRangeValue {
 
@@ -34,10 +34,10 @@ func NewPrimaryRangeValue(_timestampHash string, _schema string, _table string,
 
 	return &PrimaryRangeValue{
 		TimestampHash: _timestampHash,
-		Schema: _schema,
-		Table: _table,
-		MinValue: _minValue,
-		MaxValue: _maxValue,
+		Schema:        _schema,
+		Table:         _table,
+		MinValue:      _minValue,
+		MaxValue:      _maxValue,
 	}
 }
 
@@ -45,22 +45,22 @@ func NewPrimaryRangeValue(_timestampHash string, _schema string, _table string,
 通过指定的顺序主键名获取对应的主键值
 Params:
     _tablePKNames: 主键名
- */
+*/
 func (this *PrimaryRangeValue) GetMaxValueSlice(_tablePKNames []string) []interface{} {
-    maxValueSlice := make([]interface{}, 0, 1)
+	maxValueSlice := make([]interface{}, 0, 1)
 
-    for _, tablePKName := range _tablePKNames {
-    	maxValueSlice = append(maxValueSlice, this.MaxValue[tablePKName])
+	for _, tablePKName := range _tablePKNames {
+		maxValueSlice = append(maxValueSlice, this.MaxValue[tablePKName])
 	}
 
-    return maxValueSlice
+	return maxValueSlice
 }
 
 /* 获取当前主键范围值的最小主键值
 通过指定的顺序主键名获取对应的主键值
 Params:
     _tablePKNames: 主键名
- */
+*/
 func (this *PrimaryRangeValue) GetMinValueSlice(_tablePKNames []string) []interface{} {
 	minValueSlice := make([]interface{}, 0, 1)
 
@@ -71,13 +71,30 @@ func (this *PrimaryRangeValue) GetMinValueSlice(_tablePKNames []string) []interf
 	return minValueSlice
 }
 
+/* 获取当前主键范围值的 最小和最大 主键值
+通过指定的顺序主键名获取对应的主键值
+Params:
+    _tablePKNames: 主键名
+*/
+func (this *PrimaryRangeValue) GetMinMaxValueSlice(_tablePKNames []string) []interface{} {
+	minMaxValueSlice := make([]interface{}, 0, 1)
+
+	minValueSlice := this.GetMinValueSlice(_tablePKNames)
+	maxValueSlice := this.GetMaxValueSlice(_tablePKNames)
+
+	minMaxValueSlice = append(minMaxValueSlice, minValueSlice...)
+	minMaxValueSlice = append(minMaxValueSlice, maxValueSlice...)
+
+	return minMaxValueSlice
+}
+
 /*获取下一个PrimaryRangeValue
 通过但前主键范围值到数据库中查找
 Params:
     _maxRowCnt: 每次查询的行数
     _host: 链接数据库 ip
     _port: 链接数据库端口
- */
+*/
 func (this *PrimaryRangeValue) GetNextPrimaryRangeValue(
 	_maxRowCnt int,
 	_host string,

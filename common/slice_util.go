@@ -6,7 +6,7 @@ import "reflect"
 Pramas:
     s: slice
     elem: 元素
- */
+*/
 func HasElem(s interface{}, elem interface{}) bool {
 	arrV := reflect.ValueOf(s)
 
