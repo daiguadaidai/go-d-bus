@@ -271,7 +271,7 @@ func GetColumnData(_value interface{}, _columnType int) (interface{}, error) {
 
 	var strData string
 	switch _value.(type) {
-	case []int8:
+	case []uint8, []int8:
 		strData = string(_value.([]uint8))
 	case string:
 		strData = _value.(string)

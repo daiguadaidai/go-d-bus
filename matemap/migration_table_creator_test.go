@@ -34,7 +34,7 @@ func TestInitMigrationTableMap(t *testing.T) {
 
 	// 获取表
 	schemaName := "test"
-	tableName := "store"
+	tableName := "additional_benefit_statistics"
 	table, err := GetMigrationTableBySchemaTable(schemaName, tableName)
 	if err != nil {
 		t.Fatalf("%v", err)
@@ -46,7 +46,7 @@ func TestInitMigrationTableMap(t *testing.T) {
 	fmt.Println(table.GetTargetDropTableSql())
 	fmt.Println(table.GetSelFirstPKSqlTpl())
 	fmt.Println(table.GetSelLastPKSqlTpl())
-	fmt.Println(table.GetSelPerBatchMaxPKSqloTpl(400))
+	fmt.Println(table.GetSelPerBatchMaxPKSqlTpl(400))
 	fmt.Println(table.GetSelPerBatchSqlTpl())
 	fmt.Println(table.GetInsIgrBatchSqlTpl(30))
 	fmt.Println(table.GetRepPerBatchSqlTpl(30))

@@ -16,6 +16,9 @@ import:
   subpackages:
   - cloudsql
 - package: github.com/cevaris/ordered_map
+- package: github.com/siddontang/go-mysql
+  subpackages:
+  - replication
 testImport:
 - package: github.com/outbrain/golib
   subpackages:

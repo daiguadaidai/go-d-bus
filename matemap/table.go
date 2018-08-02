@@ -12,12 +12,14 @@ type Table struct {
 	SourceName           string         // 源 表名
 	SourceColumns        []Column       // 源 所有的列
 	SourcePKColumns      []int          // 源 主键, 没有主键的话就用第一个唯一键
+	SourceAllUKColumns   []int          // 原 所有的唯一键字段, 最终不重复
 	SourceColumnIndexMap map[string]int // 列名和 sourceColumns index 的映射, key:列名, value: 列所在的位置
 
 	TargetSchema         string         // 目标 数据库名
 	TargetName           string         // 目标 表名
 	TargetColumns        []Column       // 目标所有的列
 	TargetPKColumns      []int          // 目标 主键, 没有主键就使用第一个唯一键
+	TargetAllUKColumns   []int          // 目标 所有的唯一键字段, 最终不重复
 	TargetColumnIndexMap map[string]int // 列名和 TargetColumn index 的映射
 
 	SourceToTargetColumnNameMap map[string]string // 源端列明映射到目标端的列明
@@ -101,6 +103,49 @@ func (this *Table) initTargetToSourceColumnNameMap() error {
 
 	for i, targetColumn := range this.TargetColumns {
 		this.TargetToSourceColumnNameMap[targetColumn.Name] = this.SourceColumns[i].Name
+	}
+
+	return nil
+}
+
+/* 初始化表所有的唯一键字段(包括主键), 通过给定的字段名
+Params:
+    _uKColulmnNames: 指定的字段名
+ */
+func (this *Table) InitSourceAllUKColumnsByNames(_uKColumnNames []string) error {
+	if len(_uKColumnNames) < 1 {
+		errMSG := fmt.Sprintf("%v: 初始化源表所有的唯一键字段失败, 没有指定唯一键. " +
+			"这种情况, 可能是你的源表没有唯一键. 这不符合工具使用的要求. 请检查 %v:%v",
+			common.CurrLine(), this.SourceSchema, this.SourceName)
+		return errors.New(errMSG)
+	}
+
+	this.SourceAllUKColumns = make([]int, len(_uKColumnNames))
+
+	for i, columnName := range _uKColumnNames {
+		this.SourceAllUKColumns[i] = this.SourceColumnIndexMap[columnName]
+	}
+
+	return nil
+}
+
+func (this *Table) InitTargetAllUKColumnsBySourceUKNames(_sourceUKColumnNames []string) error {
+	if len(_sourceUKColumnNames) < 1 {
+		errMSG := fmt.Sprintf("%v: 初始化目标表所有的唯一键字段失败, 没有指定唯一键." +
+			"这种情况, 可能是你的源表没有唯一键.这不符合工具使用的要求. 请检查 %v:%v",
+			common.CurrLine(), this.SourceSchema, this.SourceName)
+		return errors.New(errMSG)
+
+	}
+
+	this.TargetAllUKColumns = make([]int, len(_sourceUKColumnNames))
+
+	// 通过源表字段名找到映射的目标表字段, 从而获得目标目标的 唯一键index
+	for i, sourceColumnName := range _sourceUKColumnNames {
+		// 获取目标列名
+		targetColumnName := this.SourceToTargetColumnNameMap[sourceColumnName]
+		// 获取目标列名对应的index
+		this.TargetAllUKColumns[i] = this.TargetColumnIndexMap[targetColumnName]
 	}
 
 	return nil

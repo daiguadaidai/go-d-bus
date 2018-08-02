@@ -63,3 +63,26 @@ func (this *TaskDao) TagTaskRowCopyComplete(_taskUUID string) int {
 
 	return int(affected)
 }
+
+/* row copy任务是否完成
+Params:
+    _taskUUID: 任务ID
+*/
+func (this *TaskDao) TaskRowCopyIsComplete(_taskUUID string) (bool, error) {
+	ormInstance := gdbc.GetOrmInstance()
+
+	task := new(model.Task)
+	columnStr := "row_copy_complete"
+	err := ormInstance.DB.Select(columnStr).Where("task_uuid = ?", _taskUUID).First(task).Error
+	if err != nil {
+		return true, err
+	}
+
+	if task.RowCopyComplete.Int64 == 1 {
+		return true, nil
+	} else {
+		return false, nil
+	}
+
+	return true, nil
+}

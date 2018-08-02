@@ -4,6 +4,7 @@ import (
 	"github.com/daiguadaidai/go-d-bus/gdbc"
 	"github.com/daiguadaidai/go-d-bus/model"
 	"github.com/jinzhu/gorm"
+	"database/sql"
 )
 
 type TargetDao struct{}
@@ -51,4 +52,26 @@ func (this *TargetDao) FindByTaskUUID(taskUUID string, columnStr string) ([]mode
 	}
 
 	return targets, nil
+}
+
+/* 更新目标实例位点信息
+Params:
+	_taskUUID: 实例UUID
+	_logFile: 日志文件
+	_logPos: 日志位点
+ */
+func (this *TargetDao) UpdateLogFilePos(_taskUUID string, _logFile string, _logPos int) int {
+	ormInstance := gdbc.GetOrmInstance()
+
+	updateTarget := model.Target {
+		RollbackLogFile: sql.NullString{_logFile, true},
+		RollbackLogPos: sql.NullInt64{int64(_logPos), true},
+	}
+
+	affected := ormInstance.DB.Model(&model.Target{}).Where(
+		"`task_uuid`=?",
+		_taskUUID,
+	).Updates(updateTarget).RowsAffected
+
+	return int(affected)
 }

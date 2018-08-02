@@ -11,6 +11,7 @@ import (
 	"io"
 	math_rand "math/rand"
 	"sync"
+	"crypto/md5"
 )
 
 func RandString(n int) string {
@@ -101,6 +102,23 @@ func PKCS5UnPadding(origData []byte) []byte {
 	length := len(origData)
 	unpadding := int(origData[length-1])
 	return origData[:(length - unpadding)]
+}
+
+/* 通过字符串计算出一个数字的hash值
+Params:
+	_value: 输入的字符串值
+ */
+func GenerateHashByString(_value string) int {
+	Md5Inst := md5.New()
+	Md5Inst.Write([]byte(_value))
+	result := Md5Inst.Sum([]byte(""))
+
+	var hashValue int
+	for _, data := range result {
+		hashValue += int(data)
+	}
+
+	return hashValue
 }
 
 func init() {

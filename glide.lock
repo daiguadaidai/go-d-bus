@@ -1,5 +1,5 @@
-hash: 8b7617f1e193dd41439360db35061336833e9fe10c1adb32eacad40814a41572
-updated: 2018-07-14T23:47:32.361518033+08:00
+hash: f6295f37e7c92334224f9eba9e92425ae95c524792e7a23b5d09c2e8881e8ed8
+updated: 2018-07-21T11:05:24.083500596+08:00
 imports:
 - name: github.com/cevaris/ordered_map
   version: 0efaee1733e3399a3cb88fc7d2ce340bf2e863d7
@@ -21,6 +21,10 @@ imports:
   version: 2418949ac30d9933e7412ccce41f1aa2ae8d5ae8
   subpackages:
   - log
+- name: github.com/siddontang/go-mysql
+  version: 03f90309874f5b13949773adcaa40a6ec5323d33
+  subpackages:
+  - replication
 - name: github.com/spf13/cobra
   version: ef82de70bb3f60c65fb8eebacbb2d122ef517385
 - name: github.com/spf13/pflag

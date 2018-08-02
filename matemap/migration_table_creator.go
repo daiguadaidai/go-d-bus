@@ -47,6 +47,15 @@ func GetMigrationTable(_key string) (*Table, error) {
 	return table, nil
 }
 
+/* 设置需要迁移的表元数据信息
+Params:
+	_key: map的key
+	_table: 需要迁移的table
+ */
+func SetMigrationTableMap(_key string, _table *Table) {
+	migrationTableMap.Store(_key, _table)
+}
+
 /* 通过配置文件创建所有需要迁移的表, 信息
 Params:
     _configMap: 需要迁移的表的映射配置信息
@@ -70,7 +79,7 @@ func InitMigrationTableMap(_configMap *config.ConfigMap) error {
 			continue
 		}
 
-		migrationTableMap.Store(key, migrationTable)
+		SetMigrationTableMap(key, migrationTable)
 
 		log.Infof("%v: 成功. 初始化迁移表元信息 %v.%v-> %v.%v", common.CurrLine(),
 			migrationTable.SourceSchema, migrationTable.SourceName, migrationTable.TargetSchema,
@@ -164,6 +173,23 @@ func NewTable(_configMap *config.ConfigMap, _schemaName string, _tableName strin
 	table.InitTargetPKColumnsFromSource()
 	log.Infof("%v: 成功. 初始化目标表的主键. %v.%v <-> %v.%v", common.CurrLine(),
 		table.SourceSchema, table.SourceName, table.TargetSchema, table.TargetName)
+
+	// 获取表所有的唯一键字段, 包括主键的
+	distinctUKColumnNames, err := FindSourceDistinctUKColumnNames(_configMap.Source.Host.String,
+		int(_configMap.Source.Port.Int64), _schemaName, _tableName)
+	if err != nil {
+		return nil, err
+	}
+	// 初始化源表所有唯一键字段, 通过字段名
+	err = table.InitSourceAllUKColumnsByNames(distinctUKColumnNames)
+	if err != nil {
+		return nil, err
+	}
+	// 初始化目标表的所有唯一键字段, 通过源字段名
+	err = table.InitTargetAllUKColumnsBySourceUKNames(distinctUKColumnNames)
+	if err != nil {
+		return nil, err
+	}
 
 	// 设置目标表的建表 sql
 	targetCreateTableSql, err := GetTargetCreateTableSql(_configMap, table)
@@ -537,6 +563,54 @@ func FindUniqueColumnNames(_host string, _port int, _schemaName string,
 
 	return uniqueColumnNames, nil
 
+}
+
+/* 获取表的所有的唯一键包含的列, 不重复, 包括的主键列
+
+ */
+func FindSourceDistinctUKColumnNames(_host string, _port int, _schemaName string,
+	_tableName string) ([]string, error) {
+	distinctUK := make([]string, 0, 1)
+
+	instance, err := gdbc.GetDynamicInstanceByHostPort(_host, _port)
+	if err != nil {
+		errMSG := fmt.Sprintf("%v: 失败. 获取表所有的唯一键列名(包括主键). %v.%v %v:%v. %v",
+			common.CurrLine(), _schemaName, _tableName, _host, _port, err)
+		return nil, errors.New(errMSG)
+	}
+
+	selectSql := `
+		SELECT 
+		    DISTINCT S.COLUMN_NAME
+		FROM INFORMATION_SCHEMA.TABLE_CONSTRAINTS AS TC
+		LEFT JOIN INFORMATION_SCHEMA.STATISTICS AS S
+		    ON TC.TABLE_SCHEMA = S.INDEX_SCHEMA
+		    AND TC.TABLE_NAME = S.TABLE_NAME
+		    AND TC.CONSTRAINT_NAME = S.INDEX_NAME 
+		WHERE TC.TABLE_SCHEMA = ?
+		    AND TC.TABLE_NAME = ?
+		    AND TC.CONSTRAINT_TYPE IN ('PRIMARY KEY', 'UNIQUE');
+    `
+
+	// 查询数据库
+	rows, err := instance.DB.Query(selectSql, _schemaName, _tableName)
+	if err != nil {
+		errMSG := fmt.Sprintf("%v, 失败. 获取表唯一键列名. %v.%v %v:%v. %v: %v",
+			common.CurrLine(), _schemaName, _tableName, _host, _port, err, selectSql)
+		return nil, errors.New(errMSG)
+	}
+	defer rows.Close()
+
+	// 循环创建 唯一键列名
+	for rows.Next() {
+		var columnName sql.NullString
+
+		rows.Scan(&columnName)
+
+		distinctUK = append(distinctUK, columnName.String)
+	}
+
+	return distinctUK, nil
 }
 
 /* 获得创建目标表语句
