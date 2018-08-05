@@ -52,4 +52,8 @@ func TestInitMigrationTableMap(t *testing.T) {
 	fmt.Println(table.GetRepPerBatchSqlTpl(30))
 	fmt.Println(table.GetUpdSqlTpl())
 	fmt.Println(table.GetDelSqlTpl())
+	fmt.Println(table.GetSelSourceRowChecksumSqlTpl())
+	fmt.Println(table.GetSelTargetRowChecksumSqlTpl())
+	fmt.Println(table.GetSelSourceRowsChecksumSqlTpl())
+	fmt.Println(table.GetSelTargetRowsChecksumSqlTpl())
 }

@@ -242,7 +242,9 @@ func GetTableFirstPrimaryMap(_host string, _port int, _schema string,
 	selectSql := migrationTable.GetSelFirstPKSqlTpl() // 获取查询表第一条数据的记录 SQL
 	log.Debug(fmt.Sprintf("%v: %v, %v", common.CurrLine(),
 		migrationTable.SourceName, selectSql))
-	log.Debug(fmt.Sprintf("%v, %v, %v", migrationTable.SourceName,
+	log.Debug(fmt.Sprintf("%v: %v, %v, %v",
+		common.CurrLine(),
+		migrationTable.SourceName,
 		migrationTable.FindSourcePKColumnNames(),
 		migrationTable.FindSourcePKColumnTypes()))
 
@@ -426,9 +428,7 @@ func SelectRowCopyData(
 		//将行数据保存到record字典
 		err = rows.Scan(scanArgs...)
 		for _, col := range values {
-			if col != nil {
-				data = append(data, col)
-			}
+			data = append(data, col)
 		}
 
 		rowCount ++
@@ -477,6 +477,7 @@ func InsertRowCopyData(
 	_, err = tx.Exec(insertSql, _data...)
 	if err != nil {
 		tx.Rollback()
+		return err
 	} else {
 		tx.Commit()
 	}

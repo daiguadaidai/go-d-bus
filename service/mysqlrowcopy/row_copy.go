@@ -66,6 +66,8 @@ type RowCopy struct {
 	RowCopyConsumeMinMaxValue map[string]sync.Map // 用于保存当前已经消费的最小的和最大的主键消费值
 
 	CloseSaveRowCopyProgressChan chan bool // 用来通知是否需要关闭保存row copy进度协程
+
+	RowCopyNoComsumeTimes map[string]int // 每个表行拷贝还有几个没有消费
 }
 
 /* 创建一个 row Copy 对象
@@ -156,6 +158,13 @@ func NewRowCopy(_parser *parser.RunParser, _configMap *config.ConfigMap,
 	// 初始化通知关闭保存 row copy 进度的协程  的通道
 	rowCopy.CloseSaveRowCopyProgressChan = make(chan bool)
 
+	// 初始化表还有几个row copy没有消费
+	rowCopy.RowCopyNoComsumeTimes = make(map[string]int)
+	for tableName, _  := range rowCopy.NeedRowCopyTableMap {
+		rowCopy.RowCopyNoComsumeTimes[tableName] = 0
+	}
+
+
 	return rowCopy, nil
 }
 
@@ -182,7 +191,7 @@ func (this *RowCopy) Start() {
 
 	// 循环保存 row copy 进度
 	this.WG.Add(1)
-	go this.LoopSaveRowCppyProgress()
+	go this.LoopSaveRowCopyProgress()
 }
 
 // 循环生成主键值
@@ -261,7 +270,7 @@ func (this *RowCopy) GeneratePrimaryRangeValue() (bool, error) {
 
 		return false, errors.New(errMSG)
 	}
-	log.Debugf("%v: 成功. 生成主键ID值. 表: %v. 最小值: %v, 最大值: %v, 截止值: %v",
+	log.Infof("%v: 成功. 生成主键ID值. 表: %v. 最小值: %v, 最大值: %v, 截止值: %v",
 		common.CurrLine(), tableName, nextPrimaryRangeValue.MinValue,
 		nextPrimaryRangeValue.MaxValue, this.MaxPrimaryRangeValueMap[tableName].MaxValue)
 
@@ -350,7 +359,8 @@ func (this *RowCopy) LoopConsumePrimaryRangeValue(_parallerTag int) {
 					primaryRangeValue.Schema, primaryRangeValue.Table,
 					primaryRangeValue.MinValue, primaryRangeValue.MaxValue, err)
 
-                break
+                time.Sleep(time.Second * 1)
+                continue
 			}
 
 			errRetryCount = 0
@@ -455,7 +465,11 @@ func (this *RowCopy) LoopAddOrDeleteCache() {
 				addOrDelete.PrimaryRangeValue,
 			)
 
+			// 表还需要row copy +1
+			this.RowCopyNoComsumeTimes[tableName] ++
+
 		case AOD_TYPE_DELETE: // 将已完成的row copy主键值删除
+
 			var minPrimaryValue *matemap.PrimaryRangeValue
 			var maxPrimaryValue *matemap.PrimaryRangeValue
 
@@ -487,7 +501,16 @@ func (this *RowCopy) LoopAddOrDeleteCache() {
 			// 是: 将当前 row copy 的值设置成 该表row copy 消费的最大值
 			if common.MapAGreaterOrEqualMapB(addOrDelete.PrimaryRangeValue.MaxValue,
 				maxPrimaryValue.MaxValue) {
-				minMaxPrimaryValue.Store("maxValue", maxPrimaryValue)
+				maxPrimaryValue = addOrDelete.PrimaryRangeValue
+			}
+			// 保存最大 row copy 范围值
+			minMaxPrimaryValue.Store("maxValue", maxPrimaryValue)
+
+			// 表还需要row copy +1
+			this.RowCopyNoComsumeTimes[tableName] --
+			// 如果该表还需要消费的 row copy 数量为0 则说明, row copy到的最小值和最大值相等
+			if this.RowCopyNoComsumeTimes[tableName] == 0 {
+				minMaxPrimaryValue.Store("minValue", maxPrimaryValue)
 			}
 
 			this.RowCopyConsumeMinMaxValue[tableName] = minMaxPrimaryValue
@@ -499,7 +522,7 @@ func (this *RowCopy) LoopAddOrDeleteCache() {
 }
 
 // 循环保存当前row copy 进度
-func (this *RowCopy) LoopSaveRowCppyProgress() {
+func (this *RowCopy) LoopSaveRowCopyProgress() {
 	defer this.WG.Done()
 
 	tableNames := make([]string, 0, 1)

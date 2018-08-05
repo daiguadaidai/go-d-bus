@@ -128,9 +128,10 @@ func GetBackquote(str string) string {
 [a, b, c] -> `a`, `b`, `c`
 Params:
     _columnNames: 列名
+    _sep: 用于join的符号
 */
-func FormatColumnNameStr(_columnNames []string) string {
-	return fmt.Sprintf("`%v`", strings.Join(_columnNames, "`, `"))
+func FormatColumnNameStr(_columnNames []string, _sep string) string {
+	return fmt.Sprintf("`%v`", strings.Join(_columnNames, _sep))
 }
 
 /* 通过列名格式化 ORDER BY 字句字段

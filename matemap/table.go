@@ -28,16 +28,20 @@ type Table struct {
 	SourceIgnoreColumns []int // 不进行同步的列
 	SourceUsefulColumns []int // 最终进行语句平凑操作的列, 最终使用的列
 
-	targetCreateTableSql   string // 创建目标表sql语句的 sql
-	targetDropTableSql     string // 删除目标表语句 sql
-	selFirstPKSqlTpl       string // 查询第一条记录  主键/唯一键 值 sql 模板
-	selLastPKSqlTpl        string // 查询最后一条记录  主键/唯一键 值 sql 模板
-	selPerBatchMaxPKSqlTpl string // 每批查询表最大 主键/唯一键 值 sql 模板
-	selPerBatchSqlTpl      string // 每批查询获取数据的sql, row copy 所用 sql 模板
-	insIgrBatchSqlTpl      string // insert ignore into 批量 sql 模板
-	repPerBatchSqlTpl      string // replace into 批量 insert 数据 sql 模板
-	updSqlTpl              string // update sql 模板
-	delSqlTpl              string // delete sql 模板
+	targetCreateTableSql          string // 创建目标表sql语句的 sql
+	targetDropTableSql            string // 删除目标表语句 sql
+	selFirstPKSqlTpl              string // 查询第一条记录  主键/唯一键 值 sql 模板
+	selLastPKSqlTpl               string // 查询最后一条记录  主键/唯一键 值 sql 模板
+	selPerBatchMaxPKSqlTpl        string // 每批查询表最大 主键/唯一键 值 sql 模板
+	selPerBatchSqlTpl             string // 每批查询获取数据的sql, row copy 所用 sql 模板
+	insIgrBatchSqlTpl             string // insert ignore into 批量 sql 模板
+	repPerBatchSqlTpl             string // replace into 批量 insert 数据 sql 模板
+	updSqlTpl                     string // update sql 模板
+	delSqlTpl                     string // delete sql 模板
+	selSourceRowCheckSqlTpl       string // 源实例 单行 checksum sql 模板
+	selTargetRowCheckSqlTpl       string // 目标 单行 checksum sql 模板
+	selSourceRowsCheckSqlTpl      string // 源实例 多行 checksum sql 模板
+	selTargetRowsCheckSqlTpl      string // 目标 多行 checksum sql 模板
 }
 
 // 初始化 源 列映射关系, 通过源列
@@ -331,6 +335,18 @@ func (this *Table) InitALLSqlTpl() {
 
 	// delete sql 模板
 	this.InitDelSqlTpl()
+
+	// 初始化源 单行 checksum sql 模板
+	this.InitSelSourceRowChecksumTpl()
+
+	// 初始化目标 单行 checksum sql 模板
+	this.InitSelTargetRowChecksumTpl()
+
+	// 初始化源 多行 checksum sql 模板
+	this.InitSelSourceRowsChecksumTpl()
+
+	// 初始化目标 多行 checksum sql 模板
+	this.InitSelTargetRowsChecksumTpl()
 }
 
 /* 初始化目标键表语句
@@ -359,7 +375,7 @@ func (this *Table) InitSelFirstPKSqlTpl() {
 	// 获取主键名称
 	pkColumnNames := this.FindSourcePKColumnNames()
 	// 获取 主键列组成的字符串
-	fieldsStr := common.FormatColumnNameStr(pkColumnNames)
+	fieldsStr := common.FormatColumnNameStr(pkColumnNames, "`, `")
 	// 获取 源表名
 	tableName := common.FormatTableName(this.SourceSchema, this.SourceName, "`")
 	// 获取升序的 ORDER BY 字句
@@ -380,7 +396,7 @@ func (this *Table) InitSelLastPKSqlTpl() {
 	// 获取主键名称
 	pkColumnNames := this.FindSourcePKColumnNames()
 	// 获取 主键列组成的字符串
-	fieldsStr := common.FormatColumnNameStr(pkColumnNames)
+	fieldsStr := common.FormatColumnNameStr(pkColumnNames, "`, `")
 	// 获取 源表名
 	tableName := common.FormatTableName(this.SourceSchema, this.SourceName, "`")
 	// 获取升序的 ORDER BY 字句
@@ -396,7 +412,7 @@ func (this *Table) InitSelPerBatchMaxPKSqlTpl() {
         FROM (
             SELECT %v
             FROM %v 
-            WHERE %v
+            WHERE (%v) >= (%v)
             ORDER BY %v
             LIMIT 0, %v
         ) AS tmp
@@ -407,11 +423,13 @@ func (this *Table) InitSelPerBatchMaxPKSqlTpl() {
 	// 获取主键名称
 	pkColumnNames := this.FindSourcePKColumnNames()
 	// 获取 主键列组成的字符串
-	fieldsStr := common.FormatColumnNameStr(pkColumnNames)
+	fieldsStr := common.FormatColumnNameStr(pkColumnNames, "`, `")
 	// 获取 源表名
 	tableName := common.FormatTableName(this.SourceSchema, this.SourceName, "`")
-	// 获取 WHERE >= 字句
-	whereMoreThenStr := common.FormatWhereStr(pkColumnNames, ">=")
+	// 获取 主键字段 字符串
+	pkFieldsStr := common.FormatColumnNameStr(pkColumnNames, "`, `")
+	// 获取 Where 中需要的值的占位符
+	wherePlaceholderStr := common.CreatePlaceholderByCount(len(pkColumnNames))
 	// 获取升序的 ORDER BY 字句
 	orderByAscStr := common.FormatOrderByStr(pkColumnNames, "ASC")
 	// limit 字句中的 offset值
@@ -420,7 +438,7 @@ func (this *Table) InitSelPerBatchMaxPKSqlTpl() {
 	orderByDescStr := common.FormatOrderByStr(pkColumnNames, "DESC")
 
 	this.selPerBatchMaxPKSqlTpl = fmt.Sprintf(selectSql, fieldsStr, fieldsStr,
-		tableName, whereMoreThenStr, orderByAscStr, limitOffsetValue, orderByDescStr)
+		tableName, pkFieldsStr, wherePlaceholderStr, orderByAscStr, limitOffsetValue, orderByDescStr)
 }
 
 // 每批查询获取数据的sql, row copy 所用 sql 模板
@@ -437,11 +455,11 @@ func (this *Table) InitSelPerBatchSqlTpl() {
 	// 获取主键名称
 	pkColumnNames := this.FindSourcePKColumnNames()
 	// 获取所有需要迁移的字段 字符串
-	fieldsStr := common.FormatColumnNameStr(usefulColumnNames)
+	fieldsStr := common.FormatColumnNameStr(usefulColumnNames, "`, `")
 	// 获取 源表名
 	tableName := common.FormatTableName(this.SourceSchema, this.SourceName, "`")
 	// 获取 主键字段 字符串
-	pkFieldsStr := common.FormatColumnNameStr(pkColumnNames)
+	pkFieldsStr := common.FormatColumnNameStr(pkColumnNames, "`, `")
 	// 获取 Where 中需要的值的占位符
 	wherePlaceholderStr := common.CreatePlaceholderByCount(len(pkColumnNames))
 
@@ -458,7 +476,7 @@ func (this *Table) InitInsIgrBatchSqlTpl() {
 	// 获取需要迁移的字段名称
 	targetUsefulColumnNames := this.FindTargetUsefulColumnNames()
 	// 获取目标所有需要迁移的字段 字符串
-	fieldsStr := common.FormatColumnNameStr(targetUsefulColumnNames)
+	fieldsStr := common.FormatColumnNameStr(targetUsefulColumnNames, "`, `")
 	// values 之后的值, 这个值主要后面需要变成占位符, 所以先使用 %v 代替
 	valuesStr := "%v"
 
@@ -474,7 +492,7 @@ func (this *Table) InitRepPerBatchSqlTpl() {
 	// 获取需要迁移的字段名称
 	targetUsefulColumnNames := this.FindTargetUsefulColumnNames()
 	// 获取目标所有需要迁移的字段 字符串
-	fieldsStr := common.FormatColumnNameStr(targetUsefulColumnNames)
+	fieldsStr := common.FormatColumnNameStr(targetUsefulColumnNames, "`, `")
 	// values 之后的值, 这个值主要后面需要变成占位符, 所以先使用 %v 代替
 	valuesStr := "%v"
 
@@ -486,7 +504,7 @@ func (this *Table) InitUpdSqlTpl() {
 	updateSql := `
         /* go-d-bus */ UPDATE %v
         SET %v
-        WHERE %v
+        WHERE (%v) = (%v)
     `
 
 	// 获取 目标表名
@@ -499,24 +517,157 @@ func (this *Table) InitUpdSqlTpl() {
 	// 获取目标所有需要迁移的字段 字符串
 	setFieldsStr := common.FormatSetStr(targetUsefulColumnNames)
 	// 获取 主键字段 字符串
-	whereStr := common.FormatWhereStr(targetPKColumnNames, "=")
+	pkFieldsStr := common.FormatColumnNameStr(targetPKColumnNames, "`, `")
+	// 获取 Where 中需要的值的占位符
+	wherePlaceholderStr := common.CreatePlaceholderByCount(len(targetPKColumnNames))
 
-	this.updSqlTpl = fmt.Sprintf(updateSql, tableName, setFieldsStr, whereStr)
+	this.updSqlTpl = fmt.Sprintf(updateSql, tableName, setFieldsStr, pkFieldsStr, wherePlaceholderStr)
 }
 
 // delete sql 模板
 func (this *Table) InitDelSqlTpl() {
-	deleteSql := "/* go-d-bus */ DELETE FROM %v WHERE %v"
+	deleteSql := "/* go-d-bus */ DELETE FROM %v WHERE (%v) = (%v)"
 
 	// 获取 目标表名
 	tableName := common.FormatTableName(this.TargetSchema, this.TargetName, "`")
-	// 获取主键名称
+	// 获取目标主键名称
 	targetPKColumnNames := this.FindTargetPKColumnNames()
 
 	// 获取 主键字段 字符串
-	whereStr := common.FormatWhereStr(targetPKColumnNames, "=")
+	pkFieldsStr := common.FormatColumnNameStr(targetPKColumnNames, "`, `")
+	// 获取 Where 中需要的值的占位符
+	wherePlaceholderStr := common.CreatePlaceholderByCount(len(targetPKColumnNames))
 
-	this.delSqlTpl = fmt.Sprintf(deleteSql, tableName, whereStr)
+	this.delSqlTpl = fmt.Sprintf(deleteSql, tableName, pkFieldsStr, wherePlaceholderStr)
+}
+
+/* 初始化源 单行数据 checksum sql 模板
+把多个字段拼凑称一个字段并且使用 '#' 井号隔开, 如下显示:
+id, name, age
+SELECT RCR32(CONCAT(
+    `id`, '#', `name`, '#', `age`
+))
+FROM xxx
+WHERE id = xxx
+使用 CONCAT 后的值: id#name#age
+  */
+func (this *Table) InitSelSourceRowChecksumTpl() {
+	selectSql := `
+        /* go-d-bus checksum row source */ SELECT CRC32(CONCAT(
+            %v
+        ))
+        FROM %v
+        WHERE (%v) = (%v)
+    `
+
+	// 获取需要迁移的字段名称
+	usefulColumnNames := this.FindUsefulColumnNames()
+	// 获取主键名称
+	pkColumnNames := this.FindSourcePKColumnNames()
+	// 获取所有需要迁移的字段 字符串
+	fieldsStr := common.FormatColumnNameStr(usefulColumnNames, "`, '#', `")
+	// 获取 源表名
+	tableName := common.FormatTableName(this.SourceSchema, this.SourceName, "`")
+	// 获取 主键字段 字符串
+	pkFieldsStr := common.FormatColumnNameStr(pkColumnNames, "`, `")
+	// 获取 Where 中需要的值的占位符
+	wherePlaceholderStr := common.CreatePlaceholderByCount(len(pkColumnNames))
+
+	this.selSourceRowCheckSqlTpl = fmt.Sprintf(selectSql, fieldsStr, tableName, pkFieldsStr,
+		wherePlaceholderStr)
+}
+
+// 初始化源 单行数据 checksum sql 模板
+// 处理方式和 InitSourceRowChecksumTpl 一样
+func (this *Table) InitSelTargetRowChecksumTpl() {
+	selectSql := `
+        /* go-d-bus checksum row target */ SELECT CRC32(CONCAT(
+            %v
+        ))
+        FROM %v
+        WHERE (%v) = (%v)
+    `
+
+	// 获取需要迁移的字段名称
+	usefulColumnNames := this.FindTargetUsefulColumnNames()
+	// 获取主键名称
+	pkColumnNames := this.FindTargetPKColumnNames()
+	// 获取所有需要迁移的字段 字符串
+	fieldsStr := common.FormatColumnNameStr(usefulColumnNames, "`, '#', `")
+	// 获取 源表名
+	tableName := common.FormatTableName(this.TargetSchema, this.TargetName, "`")
+	// 获取 主键字段 字符串
+	pkFieldsStr := common.FormatColumnNameStr(pkColumnNames, "`, `")
+	// 获取 Where 中需要的值的占位符
+	wherePlaceholderStr := common.CreatePlaceholderByCount(len(pkColumnNames))
+
+	this.selTargetRowCheckSqlTpl = fmt.Sprintf(selectSql, fieldsStr, tableName, pkFieldsStr,
+		wherePlaceholderStr)
+}
+
+/* 初始化源 多行行数据 checksum sql 模板
+把多个字段拼凑称一个字段并且使用 '#' 井号隔开, 如下显示:
+id, name, age
+SELECT SUMRCR32(CONCAT(
+    id, "#", name, "#", age
+)))
+FROM xxx
+WHERE id = xxx
+使用 CONCAT 后的值: id#name#age
+  */
+func (this *Table) InitSelSourceRowsChecksumTpl() {
+	selectSql := `
+        /* go-d-bus checksum rows source */ SELECT SUM(CRC32(CONCAT(
+            %v
+        )))
+        FROM %v
+        WHERE (%v) = (%v)
+    `
+
+	// 获取需要迁移的字段名称
+	usefulColumnNames := this.FindUsefulColumnNames()
+	// 获取主键名称
+	pkColumnNames := this.FindSourcePKColumnNames()
+	// 获取所有需要迁移的字段 字符串
+	fieldsStr := common.FormatColumnNameStr(usefulColumnNames, "`, '#', `")
+	// 获取 源表名
+	tableName := common.FormatTableName(this.SourceSchema, this.SourceName, "`")
+	// 获取 主键字段 字符串
+	pkFieldsStr := common.FormatColumnNameStr(pkColumnNames, "`, `")
+	// 获取 Where 中需要的值的占位符
+	wherePlaceholderStr := common.CreatePlaceholderByCount(len(pkColumnNames))
+
+	this.selSourceRowsCheckSqlTpl = fmt.Sprintf(selectSql, fieldsStr, tableName, pkFieldsStr,
+		wherePlaceholderStr)
+
+}
+
+// 初始化源 多行数据 checksum sql 模板
+// 处理方式和 InitSourceRowsChecksumTpl 一样
+func (this *Table) InitSelTargetRowsChecksumTpl() {
+	selectSql := `
+        /* go-d-bus checksum row target */ SELECT SUM(CRC32(CONCAT(
+            %v
+        )))
+        FROM %v
+        WHERE (%v) = (%v)
+    `
+
+	// 获取需要迁移的字段名称
+	usefulColumnNames := this.FindTargetUsefulColumnNames()
+	// 获取主键名称
+	pkColumnNames := this.FindTargetPKColumnNames()
+	// 获取所有需要迁移的字段 字符串
+	fieldsStr := common.FormatColumnNameStr(usefulColumnNames, "`, '#', `")
+	// 获取 源表名
+	tableName := common.FormatTableName(this.TargetSchema, this.TargetName, "`")
+	// 获取 主键字段 字符串
+	pkFieldsStr := common.FormatColumnNameStr(pkColumnNames, "`, `")
+	// 获取 Where 中需要的值的占位符
+	wherePlaceholderStr := common.CreatePlaceholderByCount(len(pkColumnNames))
+
+	this.selTargetRowsCheckSqlTpl = fmt.Sprintf(selectSql, fieldsStr, tableName, pkFieldsStr,
+		wherePlaceholderStr)
 }
 
 // 获得创建目标表语句
@@ -582,6 +733,26 @@ func (this *Table) GetUpdSqlTpl() string {
 // 获取 delete sql 语句
 func (this *Table) GetDelSqlTpl() string {
 	return this.delSqlTpl
+}
+
+// 获取源实例表 单行checksum语句
+func (this *Table) GetSelSourceRowChecksumSqlTpl() string {
+	return this.selSourceRowCheckSqlTpl
+}
+
+// 获取目标实例表 单行checksum语句
+func (this *Table) GetSelTargetRowChecksumSqlTpl() string {
+	return this.selTargetRowCheckSqlTpl
+}
+
+// 获取源实例表 多行checksum语句
+func (this *Table) GetSelSourceRowsChecksumSqlTpl() string {
+	return this.selSourceRowsCheckSqlTpl
+}
+
+// 获取目标实例表 多行checksum语句
+func (this *Table) GetSelTargetRowsChecksumSqlTpl() string {
+	return this.selTargetRowsCheckSqlTpl
 }
 
 // 获取源表主键数据类型
