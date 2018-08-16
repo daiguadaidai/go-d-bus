@@ -53,13 +53,17 @@ var runCmd = &cobra.Command{
     --stop-log-pos=0 \
     --enable-apply-binlog=true \
     --enable-row-copy=true \
+    --checksum=true \
     --apply-binlog-paraller=8 \
     --row-copy-paraller=8 \
+    --checksum-paraller=1 \
+    --checksum-fix-paraller=1 \
     --binlog-apply-water-mark=10000 \
     --row-copy-water-mark=100 \
     --row-copy-limit=1000 \
     --heartbeat-schema=dbmonitor \
-    --heartbeat-table=heartbeat_table
+    --heartbeat-table=heartbeat_table \
+    --err-retry-count=60
     
     `,
 	// Uncomment the following line if your bare application
@@ -122,15 +126,21 @@ func init() {
 	runCmd.Flags().IntVar(&runParser.StopLogPos, "stop-log-pos", -1,
 		"任务停止应用 binlog 的位点")
 
-	runCmd.Flags().IntVar(&runParser.ApplyBinlogParaller, "apply-binlog-paraller",
-		-1, "应用binglog的并发数")
-	runCmd.Flags().IntVar(&runParser.RowCopyParaller, "row-copy-paraller",
-		-1, "进行数据拷贝(row copy)的并发数")
-
 	runCmd.Flags().BoolVar(&runParser.EnableApplyBinlog, "enable-apply-binlog",
 		true, "是否进行应用binlog")
 	runCmd.Flags().BoolVar(&runParser.EnableRowCopy, "enable-row-copy",
 		true, "是否进行数据拷贝(row copy)")
+	runCmd.Flags().BoolVar(&runParser.EnableChecksum, "enable-checksum",
+		true, "是否进行checksum")
+
+	runCmd.Flags().IntVar(&runParser.ApplyBinlogParaller, "apply-binlog-paraller",
+		-1, "应用binglog的并发数")
+	runCmd.Flags().IntVar(&runParser.RowCopyParaller, "row-copy-paraller",
+		-1, "进行数据拷贝(row copy)的并发数")
+	runCmd.Flags().IntVar(&runParser.ChecksumParaller, "checksum-paraller",
+		-1, "进行checksum的并发数")
+	runCmd.Flags().IntVar(&runParser.ChecksumFixParaller, "checksum-fix-paraller",
+		-1, "进行checksum修复数据的并发数")
 
 	runCmd.Flags().IntVar(&runParser.ApplyBinlogHighWaterMark, "binlog-apply-water-mark",
 		-1, "应用binlog队列缓存最大个数")

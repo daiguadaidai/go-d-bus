@@ -240,8 +240,6 @@ func GetTableFirstPrimaryMap(_host string, _port int, _schema string,
 	}
 
 	selectSql := migrationTable.GetSelFirstPKSqlTpl() // 获取查询表第一条数据的记录 SQL
-	log.Debug(fmt.Sprintf("%v: %v, %v", common.CurrLine(),
-		migrationTable.SourceName, selectSql))
 	log.Debug(fmt.Sprintf("%v: %v, %v, %v",
 		common.CurrLine(),
 		migrationTable.SourceName,
@@ -391,11 +389,6 @@ func SelectRowCopyData(
 	_port int,
 	_primaryRangeValue *matemap.PrimaryRangeValue,
 ) ([]interface{}, int, error) {
-	instance, err := gdbc.GetDynamicInstanceByHostPort(_host, _port)
-	if err != nil {
-		return nil, 0, err
-	}
-
 	// 获取需要迁移的表的元数据信息
 	table, err := matemap.GetMigrationTableBySchemaTable(_primaryRangeValue.Schema,
 		_primaryRangeValue.Table)
@@ -408,11 +401,19 @@ func SelectRowCopyData(
 	// 获取 select where 占位符的值
 	whereValue := _primaryRangeValue.GetMinMaxValueSlice(table.FindSourcePKColumnNames())
 
+	// 获取实例
+	instance, err := gdbc.GetDynamicInstanceByHostPort(_host, _port)
+	if err != nil {
+		return nil, 0, err
+	}
+
 	// 获取 所有行
 	rows, err := instance.DB.Query(selectSql, whereValue...)
 	defer rows.Close()
 	if err != nil {
-		return nil, 0, err
+		errMSG := fmt.Sprintf("%v: row copy 批量获取源表数据出错. %v. %v",
+			common.CurrLine(), selectSql, err)
+		return nil, 0, errors.New(errMSG)
 	}
 
 	columns, _ := rows.Columns()

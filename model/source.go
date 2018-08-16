@@ -15,7 +15,7 @@ type Source struct {
 	UserName     sql.NullString `gorm:"column:user;type:varchar(30);not null"`                                            // 链接数据库 user
 	Password     sql.NullString `gorm:"column:passwd;type:varchar(30);not null"`                                          // 链接数据库 password
 	UpdatedAt    mysql.NullTime `gorm:"column:updated_at;not null;default:CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP"` // 更新时间
-	CreateAt     mysql.NullTime `gorm:"column:created_at;not null;default:CURRENT_TIMESTAMP"`                             // 创建时间
+	CreatedAt    mysql.NullTime `gorm:"column:created_at;not null;default:CURRENT_TIMESTAMP"`                             // 创建时间
 	ApplyLogFile sql.NullString `gorm:"column:log_file;type:varchar(20)"`                                                 // 当前binlog应用位点文件
 	ApplyLogPos  sql.NullInt64  `gorm:"column:log_pos"`                                                                   // 当前binlog应用位点
 	StartLogFile sql.NullString `gorm:"type:varchar(20)"`                                                                 // 开始binlog应用位点文件

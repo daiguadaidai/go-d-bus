@@ -14,6 +14,8 @@ import (
 const (
 	APPLY_BINLOG_PARALLER        = 8     // 默认应用binlog并发数
 	ROW_COPY_PARALLER            = 8     // 默认 row copy 并发数
+	CHECKSUM_PARALLER            = 1     // 默认 checksum 并发数
+	CHECKSUM_FIX_PARALLER        = 1     // 默认 checksum修复数据 并发数
 	APPLY_BINLOG_HIGH_WATER_MARK = 10000 // 默认 binlog 缓存队列大小
 	ROW_COPY_HIGH_WATER_MARK     = 100   // 默认 row copy 队列缓存大小
 	ROW_COPY_LIMIT               = 1000  // 默认 每次 row copy 行数
@@ -32,11 +34,14 @@ type RunParser struct {
 	StopLogFile string // 应用到那个 binlog 停止
 	StopLogPos  int    // 应用到 binlog 哪个位点停止
 
-	RowCopyParaller     int // row copy 的并发数
-	ApplyBinlogParaller int // 应用binlog 的并发数
-
 	EnableRowCopy     bool // 是否运行 row copy
 	EnableApplyBinlog bool // 是否运行应用 binlog
+	EnableChecksum    bool // 是否运行checksum
+
+	RowCopyParaller     int // row copy 的并发数
+	ApplyBinlogParaller int // 应用binlog 的并发数
+	ChecksumParaller    int // checksum 的并发数
+	ChecksumFixParaller int // checkusm修复数据并发数
 
 	ApplyBinlogHighWaterMark int // 进行 应用 binlog 队列中最多缓存多少个值
 	RowCopyHighWaterMark     int // 进行row copy队列中最多缓存多少个值
@@ -57,13 +62,6 @@ func (this *RunParser) Parse() error {
 		return err
 	}
 
-	// 检测是否有指定 应用binlog 和row copy
-	if !this.EnableRowCopy && !this.EnableApplyBinlog {
-		errMSG := fmt.Sprintf("失败. 没有指定需要 row copy 还是 应用binlog. task UUID: %v %v",
-			this.TaskUUID, common.CurrLine())
-		return errors.New(errMSG)
-	}
-
 	// 解析开始binlog信息
 	if err := this.ParseStartBinlogInfo(); err != nil {
 		return err
@@ -74,13 +72,15 @@ func (this *RunParser) Parse() error {
 		return err
 	}
 
-	// 解析相关并发数
-	this.ParseApplyBinlogParaller()
-	this.ParseRowCopyParaller()
-
 	// 解析并发队列缓存大小
 	this.ParseApplyBinlogHighWaterMark()
 	this.ParseRowCopyHighWaterMark()
+
+	// 解析相关并发数
+	this.ParseApplyBinlogParaller()
+	this.ParseRowCopyParaller()
+	this.ParseChecksumParaller()
+	this.ParseChecksumFixParaller()
 
 	// 解析每次row copy行数
 	this.ParseRowCopyLimit()
@@ -219,9 +219,8 @@ func (this *RunParser) ParseApplyBinlogParaller() {
 	columnStr := "binlog_paraller"
 	task, err := taskDao.GetByTaskUUID(this.TaskUUID, columnStr)
 	if err != nil {
-		errMSG := fmt.Sprintf("失败. 解析应用binlog并发参数失败(从数据库获取数据时). "+
+		log.Errorf("失败. 解析应用binlog并发参数失败(从数据库获取数据时). "+
 			"将设置称默认值: %v %v", APPLY_BINLOG_PARALLER, common.CurrLine())
-		log.Errorf(errMSG)
 		this.ApplyBinlogParaller = APPLY_BINLOG_PARALLER
 		return
 	}
@@ -253,9 +252,8 @@ func (this *RunParser) ParseRowCopyParaller() {
 	columnStr := "row_copy_paraller"
 	task, err := taskDao.GetByTaskUUID(this.TaskUUID, columnStr)
 	if err != nil {
-		errMSG := fmt.Sprintf("失败. 解析并发参数失败(从数据库获取数据时). "+
+		log.Errorf("失败. 解析并发参数失败(从数据库获取数据时). "+
 			"将设置称默认值: %v %v", ROW_COPY_PARALLER, common.CurrLine())
-		log.Errorf(errMSG)
 		this.RowCopyParaller = ROW_COPY_PARALLER
 		return
 	}
@@ -271,6 +269,71 @@ func (this *RunParser) ParseRowCopyParaller() {
 	// 数据库中没有则使用默认值
 	this.RowCopyParaller = ROW_COPY_PARALLER
 	log.Warningf("无法获取到row copy 并发数. 使用默认值: %v %v", ROW_COPY_PARALLER,
+		common.CurrLine())
+	return
+}
+
+// 解析 checksum 并发
+func (this *RunParser) ParseChecksumParaller() {
+	// 如果在命令行参数中有指定 checksum 并发数. 则使用命令行中的并发数
+	if this.ChecksumParaller > 0 {
+		return
+	}
+
+	// 如果命令行没指定则从数据库中获取
+	taskDao := new(dao.TaskDao)
+	columnStr := "checksum_paraller"
+	task, err := taskDao.GetByTaskUUID(this.TaskUUID, columnStr)
+	if err != nil {
+		log.Errorf("失败. 解析checksum并发参数失败(从数据库获取数据时). "+
+			"将设置称默认值: %v %v", CHECKSUM_PARALLER, common.CurrLine())
+		this.ChecksumParaller = CHECKSUM_PARALLER
+		return
+	}
+
+	// 在数据库中有 row copy 的并发数
+	if task.ChecksumParaller.Valid && task.ChecksumParaller.Int64 > 0 {
+		log.Warningf("Checksum 并发数从数据库中获取. %v %v", task.ChecksumParaller.Int64,
+			common.CurrLine())
+		this.ChecksumParaller = int(task.ChecksumParaller.Int64)
+		return
+	}
+
+	// 数据库中没有则使用默认值
+	this.ChecksumParaller = CHECKSUM_PARALLER
+	log.Warningf("无法获取到 checksum 并发数. 使用默认值: %v %v", CHECKSUM_PARALLER,
+		common.CurrLine())
+	return
+}
+
+func (this *RunParser) ParseChecksumFixParaller() {
+	// 如果在命令行参数中有指定 checksum 并发数. 则使用命令行中的并发数
+	if this.ChecksumFixParaller > 0 {
+		return
+	}
+
+	// 如果命令行没指定则从数据库中获取
+	taskDao := new(dao.TaskDao)
+	columnStr := "checksum_fix_paraller"
+	task, err := taskDao.GetByTaskUUID(this.TaskUUID, columnStr)
+	if err != nil {
+		log.Errorf("%v: 失败. 解析checksum修复数据并发参数失败(从数据库获取数据时). "+
+			"将设置称默认值: %v", common.CurrLine(), CHECKSUM_FIX_PARALLER)
+		this.ChecksumFixParaller = CHECKSUM_FIX_PARALLER
+		return
+	}
+
+	// 在数据库中有 row copy 的并发数
+	if task.ChecksumFixParaller.Valid && task.ChecksumFixParaller.Int64 > 0 {
+		log.Warningf("Checksum 修复数据并发数从数据库中获取. %v %v", task.ChecksumParaller.Int64,
+			common.CurrLine())
+		this.ChecksumFixParaller = int(task.ChecksumFixParaller.Int64)
+		return
+	}
+
+	// 数据库中没有则使用默认值
+	this.ChecksumFixParaller = CHECKSUM_FIX_PARALLER
+	log.Warningf("无法获取到 checksum 修复数据并发数. 使用默认值: %v %v", CHECKSUM_FIX_PARALLER,
 		common.CurrLine())
 	return
 }

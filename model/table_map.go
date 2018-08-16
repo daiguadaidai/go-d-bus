@@ -16,7 +16,7 @@ type TableMap struct {
 	MaxIDValue      sql.NullString `gorm:"column:max_id_value;type:varchar(200)"`                                            // 表需要row copy 到哪一行
 	CurrIDValue     sql.NullString `gorm:"column:curr_id_value;type:varchar(200)"`                                           // 表当前row copy到哪一行
 	UpdatedAt       mysql.NullTime `gorm:"column:updated_at;not null;default:CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP"` // 更新时间
-	CreateAt        mysql.NullTime `gorm:"column:created_at;not null;default:CURRENT_TIMESTAMP"`                             // 创建时间
+	CreatedAt       mysql.NullTime `gorm:"column:created_at;not null;default:CURRENT_TIMESTAMP"`                             // 创建时间
 }
 
 func (TableMap) TableName() string {

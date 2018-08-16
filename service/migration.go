@@ -8,7 +8,9 @@ import (
 	"sync"
 	mysqlrc "github.com/daiguadaidai/go-d-bus/service/mysqlrowcopy"
 	mysqlab "github.com/daiguadaidai/go-d-bus/service/mysqlapplybinlog"
+	mysqlcs "github.com/daiguadaidai/go-d-bus/service/mysqlchecksum"
 	"github.com/daiguadaidai/go-d-bus/common"
+	"fmt"
 )
 
 func StartMigration(_parser *parser.RunParser) {
@@ -49,14 +51,31 @@ func StartMigration(_parser *parser.RunParser) {
 		log.Warningf("%v: 没有指定应用binlog, 本次迁移将不会进行binlog的应用", common.CurrLine())
 	}
 
+	// 用于每次row copy 完成后告诉checksum需要对哪个范围进行checksum
+	rowCopy2CheksumChan := make(chan *matemap.PrimaryRangeValue)
+	// 当所有的 row copy 完成通知可以进行二次checksum
+	// 第一次checksum是每一次rowcopy完都进行, 如果发生了数据不一致,
+	// 会在最后所有的rowcopy完成后再次对第一次不一致的进行checksum操作
+	notifySecondChecksum := make(chan bool)
 	// 开始进行 row copy
 	if _parser.EnableRowCopy {
-		err = StartRowCopy(_parser, configMap, wg)
+		err = StartRowCopy(_parser, configMap, wg, rowCopy2CheksumChan, notifySecondChecksum)
 		if err != nil {
-			log.Fatalf("%v", err)
+			log.Fatalf("%v: %v", common.CurrLine(), err)
 		}
 	} else {
 		log.Warningf("%v: 没有指定row copy, 本次迁移将不会进行表拷贝操作", common.CurrLine())
+	}
+
+	// 开启了 checksum功能, 需要进行checksum
+	fmt.Println("----- enable checksum", _parser.EnableChecksum)
+	if _parser.EnableChecksum {
+		err = StartChecksum(_parser, configMap, wg, rowCopy2CheksumChan, notifySecondChecksum)
+		if err != nil {
+			log.Fatalf("%v: %v", common.CurrLine(), err)
+		}
+	} else {
+		log.Warningf("%v: 没有指定checksum, 本次迁移将不会进行数据校验", common.CurrLine())
 	}
 
 	wg.Wait()
@@ -88,9 +107,12 @@ Params:
     _parser: 启动参数
     _configMap: 需要迁移的表的配置映射信息
     _wg: 并发参数
+	_rowCopy2ChecksumChan: 行拷贝到checksum
+	_notifySecondChecksum: 通知可以进行二次checksum了
  */
 func StartRowCopy(_parser *parser.RunParser, _configMap *config.ConfigMap,
-	_wg *sync.WaitGroup) error {
+	_wg *sync.WaitGroup, _rowCopy2ChecksumChan chan *matemap.PrimaryRangeValue,
+	_notifySecondChecksum chan bool) error {
 
 	isComplete, err := mysqlrc.TaskRowCopyIsComplete(_configMap.TaskUUID)
 	if err != nil {
@@ -106,13 +128,36 @@ func StartRowCopy(_parser *parser.RunParser, _configMap *config.ConfigMap,
 		return nil
 	}
 
-	rowCopy, err := mysqlrc.NewRowCopy(_parser, _configMap, _wg)
+	rowCopy, err := mysqlrc.NewRowCopy(_parser, _configMap, _wg, _rowCopy2ChecksumChan, _notifySecondChecksum)
 	if err != nil {
 		return err
 	}
 
 	rowCopy.WG.Add(1)
 	rowCopy.Start()
+
+	return nil
+}
+
+/* 开始进行数据校验
+Params:
+    _parser: 启动参数
+    _configMap: 需要迁移的表的配置映射信息
+    _wg: 并发参数
+	_rowCopy2ChecksumChan: 行拷贝到checksum
+	_notifySecondChecksum: 通知可以进行二次checksum了
+ */
+func StartChecksum(_parser *parser.RunParser, _configMap *config.ConfigMap,
+	_wg *sync.WaitGroup, _rowCopy2ChecksumChan chan *matemap.PrimaryRangeValue,
+	_notifySecondChecksum chan bool) error {
+
+	checksum, err := mysqlcs.NewChecksum(_parser, _configMap, _wg, _rowCopy2ChecksumChan, _notifySecondChecksum)
+	if err != nil {
+		return err
+	}
+
+	checksum.WG.Add(1)
+	checksum.Start()
 
 	return nil
 }

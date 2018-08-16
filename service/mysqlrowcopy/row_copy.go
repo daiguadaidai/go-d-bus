@@ -68,6 +68,13 @@ type RowCopy struct {
 	CloseSaveRowCopyProgressChan chan bool // 用来通知是否需要关闭保存row copy进度协程
 
 	RowCopyNoComsumeTimes map[string]int // 每个表行拷贝还有几个没有消费
+
+	ToChecksumChan chan *matemap.PrimaryRangeValue // row copy 完成后通知checksum
+
+	// 当所有的 row copy 完成通知可以进行二次checksum
+	// 第一次checksum是每一次rowcopy完都进行, 如果发生了数据不一致,
+	// 会在最后所有的rowcopy完成后再次对第一次不一致的进行checksum操作
+	NotifySecondChecksum chan bool
 }
 
 /* 创建一个 row Copy 对象
@@ -75,9 +82,11 @@ Params
     _parser: 命令行解析的信息
     _configMap: 配置信息
     _wg: 并发控制参数
+	_toChecksumChan: row copy 完成通知 checksum 的 checksum chan
 */
 func NewRowCopy(_parser *parser.RunParser, _configMap *config.ConfigMap,
-	_wg *sync.WaitGroup) (*RowCopy, error) {
+	_wg *sync.WaitGroup, _toChecksumChan chan *matemap.PrimaryRangeValue,
+	_notifySecondChecksum chan bool) (*RowCopy, error) {
 
 	rowCopy := new(RowCopy)
 
@@ -164,6 +173,11 @@ func NewRowCopy(_parser *parser.RunParser, _configMap *config.ConfigMap,
 		rowCopy.RowCopyNoComsumeTimes[tableName] = 0
 	}
 
+	// 初始化通知checksum通道
+	rowCopy.ToChecksumChan = _toChecksumChan
+
+	// 初始化row copy 完成通知checksum进行二次checksum
+	rowCopy.NotifySecondChecksum = _notifySecondChecksum
 
 	return rowCopy, nil
 }
@@ -329,6 +343,8 @@ func (this *RowCopy) LoopConsumePrimaryRangeValue(_parallerTag int) {
 		this.RowCopyComsumerCount --
 		if this.RowCopyComsumerCount == 0 { // 如果都消费完了,可以关闭掉row copy 主键处理的缓存
 			close(this.AddOrDelWatingTagCompleteChan)
+			log.Infof("%v: row copy 完成, 通知可以进行二次校验了", common.CurrLine())
+			this.NotifySecondChecksum <- true // 通知checksum可以进行二次校验了
 		}
 		this.RowCopyConsumerCountMutex.Unlock()
 	}()
@@ -363,7 +379,12 @@ func (this *RowCopy) LoopConsumePrimaryRangeValue(_parallerTag int) {
                 continue
 			}
 
-			errRetryCount = 0
+			// 一个范围的row copy完成后将通知checksum
+			if this.Parser.EnableChecksum {
+				this.ToChecksumChan <- primaryRangeValue
+			}
+
+			errRetryCount = 0 // 设置当前错误重试次数为0, 代表没有错误
 	        break
 		}
 	}
@@ -399,8 +420,7 @@ func (this *RowCopy) ConsumePrimaryRangeValue(
 
 	// 获取源表数据
 	data, rowCount, err := SelectRowCopyData(this.ConfigMap.Source.Host.String,
-		int(this.ConfigMap.Source.Port.Int64),
-		_primaryRangeValue)
+		int(this.ConfigMap.Source.Port.Int64), _primaryRangeValue)
 	if err != nil {
 		errMSG := fmt.Sprintf("%v: 失败. row copy 获取源表数据错误." +
 			" 表: %v.%v 最小值: %v, 最大值: %v. %v:%v, %v",
@@ -440,8 +460,6 @@ func (this *RowCopy) ConsumePrimaryRangeValue(
 	addOrDelete := NewAddOrDelete(_primaryRangeValue.Schema, _primaryRangeValue.Table,
 		_primaryRangeValue.TimestampHash, AOD_TYPE_DELETE, _primaryRangeValue)
 	this.AddOrDelWatingTagCompleteChan <- addOrDelete
-
-	// TODO: 通知进行checksum
 
 	return nil
 }
