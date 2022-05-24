@@ -62,8 +62,8 @@ func init() {
 		"devMeta-d_bus": {
 			Username:          "HH",
 			Password:          "oracle12",
-			Host:              "192.167.137.21",
-			Port:              3307,
+			Host:              "127.0.0.1",
+			Port:              3306,
 			Database:          "d_bus",
 			CharSet:           "utf8mb4",
 			MaxOpenConns:      8,
@@ -90,10 +90,10 @@ func init() {
 
 		// 生产线d_bus库
 		"productMeta-d_bus": {
-			Username:          "HH",
-			Password:          "oracle12",
-			Host:              "192.167.137.21",
-			Port:              3307,
+			Username:          "yh_easydb",
+			Password:          "dcD6gdi3Iz4VL1Rs",
+			Host:              "10.247.0.88",
+			Port:              3306,
 			Database:          "d_bus",
 			CharSet:           "utf8mb4",
 			MaxOpenConns:      8,

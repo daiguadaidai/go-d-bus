@@ -9,7 +9,6 @@ import (
 	mysqlcs "github.com/daiguadaidai/go-d-bus/service/mysqlchecksum"
 	mysqlrc "github.com/daiguadaidai/go-d-bus/service/mysqlrowcopy"
 	"github.com/outbrain/golib/log"
-	"os"
 	"sync"
 )
 
@@ -33,8 +32,7 @@ func StartMigration(_parser *parser.RunParser) {
 	// 如果没有设置binglog开始位点则show master status 找
 	if _parser.StartLogFile == "" || _parser.StartLogPos < 0 {
 		if err := _parser.SetStartBinlogInfoByHostAndPort(configMap.Source.Host.String, int(configMap.Source.Port.Int64)); err != nil {
-			log.Errorf("实时获取主库 位点信息出错. %v, 退出迁移", err.Error())
-			os.Exit(1)
+			log.Fatalf("实时获取主库 位点信息出错. %v, 退出迁移", err.Error())
 		}
 	}
 
@@ -48,16 +46,6 @@ func StartMigration(_parser *parser.RunParser) {
 	matemap.ShowAllIgnoreMigrationTableNames(configMap)
 
 	wg := new(sync.WaitGroup)
-
-	// 开始应用binlog
-	if _parser.EnableApplyBinlog {
-		err = StartApplyBinlog(_parser, configMap, wg)
-		if err != nil {
-			log.Fatalf("%v", err)
-		}
-	} else {
-		log.Warningf("%v: 没有指定应用binlog, 本次迁移将不会进行binlog的应用", common.CurrLine())
-	}
 
 	// 用于每次row copy 完成后告诉checksum需要对哪个范围进行checksum
 	rowCopy2CheksumChan := make(chan *matemap.PrimaryRangeValue)
@@ -85,6 +73,16 @@ func StartMigration(_parser *parser.RunParser) {
 		log.Warningf("%v: 没有指定checksum, 本次迁移将不会进行数据校验", common.CurrLine())
 	}
 
+	// 开始应用binlog
+	if _parser.EnableApplyBinlog {
+		err = StartApplyBinlog(_parser, configMap, wg)
+		if err != nil {
+			log.Fatalf("%v", err)
+		}
+	} else {
+		log.Warningf("%v: 没有指定应用binlog, 本次迁移将不会进行binlog的应用", common.CurrLine())
+	}
+
 	wg.Wait()
 }
 
@@ -101,8 +99,7 @@ func StartApplyBinlog(_parser *parser.RunParser, _configMap *config.ConfigMap, _
 		return err
 	}
 
-	applyBinlog.WG.Add(1)
-	go applyBinlog.Start()
+	applyBinlog.Start()
 
 	return nil
 }
@@ -115,9 +112,13 @@ Params:
 	_rowCopy2ChecksumChan: 行拷贝到checksum
 	_notifySecondChecksum: 通知可以进行二次checksum了
 */
-func StartRowCopy(_parser *parser.RunParser, _configMap *config.ConfigMap,
-	_wg *sync.WaitGroup, _rowCopy2ChecksumChan chan *matemap.PrimaryRangeValue,
-	_notifySecondChecksum chan bool) error {
+func StartRowCopy(
+	_parser *parser.RunParser,
+	_configMap *config.ConfigMap,
+	_wg *sync.WaitGroup,
+	_rowCopy2ChecksumChan chan *matemap.PrimaryRangeValue,
+	_notifySecondChecksum chan bool,
+) error {
 
 	isComplete, err := mysqlrc.TaskRowCopyIsComplete(_configMap.TaskUUID)
 	if err != nil {

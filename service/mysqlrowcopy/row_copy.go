@@ -84,9 +84,13 @@ Params
     _wg: 并发控制参数
 	_toChecksumChan: row copy 完成通知 checksum 的 checksum chan
 */
-func NewRowCopy(_parser *parser.RunParser, _configMap *config.ConfigMap,
-	_wg *sync.WaitGroup, _toChecksumChan chan *matemap.PrimaryRangeValue,
-	_notifySecondChecksum chan bool) (*RowCopy, error) {
+func NewRowCopy(
+	_parser *parser.RunParser,
+	_configMap *config.ConfigMap,
+	_wg *sync.WaitGroup,
+	_toChecksumChan chan *matemap.PrimaryRangeValue,
+	_notifySecondChecksum chan bool,
+) (*RowCopy, error) {
 
 	rowCopy := new(RowCopy)
 
@@ -97,8 +101,7 @@ func NewRowCopy(_parser *parser.RunParser, _configMap *config.ConfigMap,
 
 	// 初始化 需要迁移的表名映射信息
 	rowCopy.MigrationTableNameMap = matemap.FindAllMigrationTableNameMap()
-	log.Infof("%v: 成功. 初始化 row copy 所有迁移的表名. 包含了可以不用迁移的",
-		common.CurrLine())
+	log.Infof("%v: 成功. 初始化 row copy 所有迁移的表名. 包含了可以不用迁移的", common.CurrLine())
 
 	// 初始化 传输表的 主键 范围值
 	rowCopy.PrimaryRangeValueChan = make(chan *matemap.PrimaryRangeValue, _parser.RowCopyHighWaterMark)
@@ -120,8 +123,7 @@ func NewRowCopy(_parser *parser.RunParser, _configMap *config.ConfigMap,
 	}
 	rowCopy.MaxPrimaryRangeValueMap = maxPrimaryRangeValueMap
 	rowCopy.TagCompleteNeedRowCopyTables(maxNoDataTables) // 将没数据的表直接标记完成
-	log.Infof("%v: 成功. 初始化需要迁移的表row copy的截止主键值. 没有数据的表: %v",
-		common.CurrLine(), maxNoDataTables)
+	log.Infof("%v: 成功. 初始化需要迁移的表row copy的截止主键值. 没有数据的表: %v", common.CurrLine(), maxNoDataTables)
 
 	// 每个表当前生成生成到的主键范围 map: {"schema.table": PrimaryRangeValue}
 	currentPrimaryRangeValueMap, currNoDataTables, err := rowCopy.GetCurrentPrimaryRangeValueMap()
@@ -130,22 +132,19 @@ func NewRowCopy(_parser *parser.RunParser, _configMap *config.ConfigMap,
 	}
 	rowCopy.CurrentPrimaryRangeValueMap = currentPrimaryRangeValueMap
 	rowCopy.TagCompleteNeedRowCopyTables(currNoDataTables) // 将没数据的表直接标记完成
-	log.Infof("%v: 成功. 初始化需要迁移的表当前row copy到的主键值. 没有数据的表: %v",
-		common.CurrLine(), currNoDataTables)
+	log.Infof("%v: 成功. 初始化需要迁移的表当前row copy到的主键值. 没有数据的表: %v", common.CurrLine(), currNoDataTables)
 
 	// 如果表的当前 row copy 到的主键值 >= 表 row copy 截止的 主键值
 	greaterTables := rowCopy.FindCurrGreaterMaxPrimaryTables()
 	rowCopy.TagCompleteNeedRowCopyTables(greaterTables) // 将当前rowcopy的值 >= 截止的rowcopy表直接标记完成
-	log.Infof("%v: 成功. 过滤需要迁移的表中 当前ID >= 截止ID 的表有: %v",
-		common.CurrLine(), greaterTables)
+	log.Infof("%v: 成功. 过滤需要迁移的表中 当前ID >= 截止ID 的表有: %v", common.CurrLine(), greaterTables)
 
 	// 初始化每个表已经完成到的主键范围值 map: {"schema.table": PrimaryRangeValue}
 	// 初始化的时候 已经完成的row copy 范围和 当前需要进行 row copy 的是一样的
 	for key, value := range rowCopy.CurrentPrimaryRangeValueMap {
 		rowCopy.CompletePrimaryRangeValueMap.Store(key, value)
 	}
-	log.Infof("%v: 成功. 初始化已经完成的",
-		common.CurrLine())
+	log.Infof("%v: 成功. 初始化已经完成的", common.CurrLine())
 
 	// 初始化 cache row copy 的主键
 	rowCopy.WaitingTagCompletePrirmaryRangeValueMap = make(map[string]*ordered_map.OrderedMap)
@@ -161,8 +160,7 @@ func NewRowCopy(_parser *parser.RunParser, _configMap *config.ConfigMap,
 
 	// 初始化用于传输删除还是添加 需要标记完成的 PrimaryRangeValue
 	rowCopy.AddOrDelWatingTagCompleteChan = make(chan *AddOrDelete, 2*_parser.RowCopyHighWaterMark)
-	log.Infof("%v: 成功. 初始化添加还是删除需要标记id值的通道",
-		common.CurrLine())
+	log.Infof("%v: 成功. 初始化添加还是删除需要标记id值的通道", common.CurrLine())
 
 	// 初始化通知关闭保存 row copy 进度的协程  的通道
 	rowCopy.CloseSaveRowCopyProgressChan = make(chan bool)
@@ -191,8 +189,7 @@ func (this *RowCopy) Start() {
 	go this.LoopGeneratePrimaryRangeValue()
 
 	// 消费 PrimaryRangeValueChan 通道中的主键方位值
-	log.Infof("%v: 设置了 %v 个并发执行 row copy 操作.",
-		common.CurrLine(), this.Parser.RowCopyParaller)
+	log.Infof("%v: 设置了 %v 个并发执行 row copy 操作.", common.CurrLine(), this.Parser.RowCopyParaller)
 	this.RowCopyComsumerCount = this.Parser.RowCopyParaller // 记录当前有多少个 row copy 并发
 	for parallerTag := 0; parallerTag < this.Parser.RowCopyParaller; parallerTag++ {
 		this.WG.Add(1)
@@ -218,18 +215,14 @@ func (this *RowCopy) LoopGeneratePrimaryRangeValue() {
 
 	for {
 		if errRetryCount > this.Parser.ErrRetryCount {
-			log.Errorf("%v: 错误. row copy 生成主键值发生错误, 并且超过重试上线值: %v."+
-				"将退出生成主键值.", common.CurrLine(), this.Parser.ErrRetryCount)
+			log.Errorf("%v: 错误. row copy 生成主键值发生错误, 并且超过重试上线值: %v. 将退出生成主键值.", common.CurrLine(), this.Parser.ErrRetryCount)
 			return
 		}
 
 		ok, err := this.GeneratePrimaryRangeValue()
 		if err != nil {
 			errRetryCount++
-
-			log.Errorf("%v: 错误. 第 %v 次, 允许重试次数: %v. %v", common.CurrLine(),
-				errRetryCount, this.Parser.ErrRetryCount, err)
-
+			log.Errorf("%v: 错误. 第 %v 次, 允许重试次数: %v. %v", common.CurrLine(), errRetryCount, this.Parser.ErrRetryCount, err)
 			continue
 		}
 		if ok { // 已经完成所有的生成生成主键值
@@ -251,8 +244,7 @@ Return:
 func (this *RowCopy) GeneratePrimaryRangeValue() (bool, error) {
 	defer func() {
 		if err := recover(); err != nil {
-			log.Errorf("%v: 错误. 生成 row copy 主键值发生错误. %v. %v",
-				common.CurrLine(), err, string(debug.Stack()))
+			log.Errorf("%v: 错误. 生成 row copy 主键值发生错误. %v. %v", common.CurrLine(), err, string(debug.Stack()))
 
 			syscall.Exit(1)
 		}
@@ -260,12 +252,8 @@ func (this *RowCopy) GeneratePrimaryRangeValue() (bool, error) {
 
 	tableName, ok := common.GetRandomMapKey(this.NeedRowCopyTableMap)
 	if !ok { // 所有的表的 row copy 主键值范围数据都已经生成完了
-		log.Infof(
-			"%v: 所有表的主键值已经生成完. 退出生成主键值的协程 %v %v:%v",
-			common.CurrLine(),
-			this.ConfigMap.TaskUUID,
-			this.ConfigMap.Source.Host.String,
-			this.ConfigMap.Source.Port.Int64,
+		log.Infof("%v: 所有表的主键值已经生成完. 退出生成主键值的协程 %v %v:%v",
+			common.CurrLine(), this.ConfigMap.TaskUUID, this.ConfigMap.Source.Host.String, this.ConfigMap.Source.Port.Int64,
 		)
 
 		return true, nil
@@ -279,25 +267,20 @@ func (this *RowCopy) GeneratePrimaryRangeValue() (bool, error) {
 		this.ConfigMap.Source.Host.String,
 		int(this.ConfigMap.Source.Port.Int64))
 	if err != nil {
-		errMSG := fmt.Sprintf("%v: row copy 生成表的下一个主键值失败. 停止产生相关表主键值. %v. %v",
-			common.CurrLine(), tableName, err)
+		errMSG := fmt.Sprintf("%v: row copy 生成表的下一个主键值失败. 停止产生相关表主键值. %v. %v", common.CurrLine(), tableName, err)
 
 		return false, errors.New(errMSG)
 	}
 	log.Infof("%v: 成功. 生成主键ID值. 表: %v. 最小值: %v, 最大值: %v, 截止值: %v",
-		common.CurrLine(), tableName, nextPrimaryRangeValue.MinValue,
-		nextPrimaryRangeValue.MaxValue, this.MaxPrimaryRangeValueMap[tableName].MaxValue)
+		common.CurrLine(), tableName, nextPrimaryRangeValue.MinValue, nextPrimaryRangeValue.MaxValue, this.MaxPrimaryRangeValueMap[tableName].MaxValue)
 
 	// 比较但前生成的主键范围值的最小值是否 >= row copy 截止的值,
 	if common.MapAGreaterOrEqualMapB(nextPrimaryRangeValue.MinValue,
 		this.MaxPrimaryRangeValueMap[tableName].MaxValue) {
 
 		// 新生成的主键值 的最小值 大于 row copy 截止的主键值, 该表从需要迁移的变量中移除
-		log.Warningf("%v: 警告. 检测到新生成的主键范围值的最小值 >= row copy 截止的主键值."+
-			"该新生成的主键值不要进行 row copy, 标记该表已经row copy 完成. 表: %v: 最小值: %v, 截止值: %v",
-			common.CurrLine(), tableName,
-			nextPrimaryRangeValue.MinValue,
-			this.MaxPrimaryRangeValueMap[tableName].MaxValue)
+		log.Warningf("%v: 警告. 检测到新生成的主键范围值的最小值 >= row copy 截止的主键值. 该新生成的主键值不要进行 row copy, 标记该表已经row copy 完成. 表: %v: 最小值: %v, 截止值: %v",
+			common.CurrLine(), tableName, nextPrimaryRangeValue.MinValue, this.MaxPrimaryRangeValueMap[tableName].MaxValue)
 
 		delete(this.NeedRowCopyTableMap, tableName)
 
@@ -320,11 +303,8 @@ func (this *RowCopy) GeneratePrimaryRangeValue() (bool, error) {
 		this.MaxPrimaryRangeValueMap[tableName].MaxValue) {
 
 		// 新生成的主键值大于 row copy 截止的主键值, 该表从需要迁移的变量中移除
-		log.Infof("%v: 完成. 表: %v, 需要迁移的主键值已经全部生成完毕."+
-			"要求生成到 %v, 实际生成到 %v",
-			common.CurrLine(), tableName,
-			nextPrimaryRangeValue.MaxValue,
-			this.MaxPrimaryRangeValueMap[tableName].MaxValue)
+		log.Infof("%v: 完成. 表: %v, 需要迁移的主键值已经全部生成完毕. 要求生成到 %v, 实际生成到 %v",
+			common.CurrLine(), tableName, nextPrimaryRangeValue.MaxValue, this.MaxPrimaryRangeValueMap[tableName].MaxValue)
 
 		delete(this.NeedRowCopyTableMap, tableName)
 	}
@@ -357,10 +337,8 @@ func (this *RowCopy) LoopConsumePrimaryRangeValue(_parallerTag int) {
 	for primaryRangeValue := range this.PrimaryRangeValueChan {
 		for {
 			if errRetryCount > this.Parser.ErrRetryCount {
-				log.Errorf("%v: 错误. 协程 %v, row copy 消费发生错误."+
-					"并且重试次数已经达到上线 %v. 将退出消费 表: %v.%v, 最小值: %v, 最大值: %v.",
-					common.CurrLine(), _parallerTag, this.Parser.ErrRetryCount,
-					primaryRangeValue.Schema, primaryRangeValue.Table,
+				log.Errorf("%v: 错误. 协程 %v, row copy 消费发生错误. 并且重试次数已经达到上线 %v. 将退出消费 表: %v.%v, 最小值: %v, 最大值: %v.",
+					common.CurrLine(), _parallerTag, this.Parser.ErrRetryCount, primaryRangeValue.Schema, primaryRangeValue.Table,
 					primaryRangeValue.MinValue, primaryRangeValue.MaxValue)
 				return
 			}
@@ -369,10 +347,8 @@ func (this *RowCopy) LoopConsumePrimaryRangeValue(_parallerTag int) {
 			err := this.ConsumePrimaryRangeValue(_parallerTag, primaryRangeValue)
 			if err != nil {
 				errRetryCount++
-				log.Errorf("%v: 错误. 协程 %v, 重试第%v次. 需要重试%v次. "+
-					"表: %v.%v, 最小值: %v, 最大值: %v. %v",
-					common.CurrLine(), _parallerTag, errRetryCount, this.Parser.ErrRetryCount,
-					primaryRangeValue.Schema, primaryRangeValue.Table,
+				log.Errorf("%v: 错误. 协程 %v, 重试第%v次. 需要重试%v次. 表: %v.%v, 最小值: %v, 最大值: %v. %v",
+					common.CurrLine(), _parallerTag, errRetryCount, this.Parser.ErrRetryCount, primaryRangeValue.Schema, primaryRangeValue.Table,
 					primaryRangeValue.MinValue, primaryRangeValue.MaxValue, err)
 
 				time.Sleep(time.Second * 1)
@@ -389,8 +365,7 @@ func (this *RowCopy) LoopConsumePrimaryRangeValue(_parallerTag int) {
 		}
 	}
 
-	log.Infof("%v: 完成. 已经没有需要进行 row copy 的主键范围值了. 协程 %v 退出. 消费",
-		common.CurrLine(), _parallerTag)
+	log.Infof("%v: 完成. 已经没有需要进行 row copy 的主键范围值了. 协程 %v 退出. 消费", common.CurrLine(), _parallerTag)
 }
 
 /* 消费row copy 的主键值
@@ -408,10 +383,8 @@ func (this *RowCopy) ConsumePrimaryRangeValue(
 ) error {
 	defer func() {
 		if err := recover(); err != nil {
-			log.Errorf("%v: 错误. row copy 消费主键值发生错误. "+
-				"表: %v.%v, 最小值: %v, 最大值: %v. %v. 退出 go-d-bus 程序, %v",
-				common.CurrLine(), _primaryRangeValue.Schema, _primaryRangeValue.Table,
-				_primaryRangeValue.MinValue, _primaryRangeValue.MaxValue, err,
+			log.Errorf("%v: 错误. row copy 消费主键值发生错误. 表: %v.%v, 最小值: %v, 最大值: %v. %v. 退出 go-d-bus 程序, %v",
+				common.CurrLine(), _primaryRangeValue.Schema, _primaryRangeValue.Table, _primaryRangeValue.MinValue, _primaryRangeValue.MaxValue, err,
 				string(debug.Stack()))
 
 			syscall.Exit(1)
@@ -422,18 +395,14 @@ func (this *RowCopy) ConsumePrimaryRangeValue(
 	data, rowCount, err := SelectRowCopyData(this.ConfigMap.Source.Host.String,
 		int(this.ConfigMap.Source.Port.Int64), _primaryRangeValue)
 	if err != nil {
-		errMSG := fmt.Sprintf("%v: 失败. row copy 获取源表数据错误."+
-			" 表: %v.%v 最小值: %v, 最大值: %v. %v:%v, %v",
-			common.CurrLine(), _primaryRangeValue.Schema, _primaryRangeValue.Table,
-			_primaryRangeValue.MinValue, _primaryRangeValue.MaxValue,
+		errMSG := fmt.Sprintf("%v: 失败. row copy 获取源表数据错误. 表: %v.%v 最小值: %v, 最大值: %v. %v:%v, %v",
+			common.CurrLine(), _primaryRangeValue.Schema, _primaryRangeValue.Table, _primaryRangeValue.MinValue, _primaryRangeValue.MaxValue,
 			this.ConfigMap.Source.Host.String, int(this.ConfigMap.Source.Port.Int64), err)
 		return errors.New(errMSG)
 	}
 	if rowCount < 1 { // 没有数据
-		log.Warningf("%v: 警告. row copy 没有获取到表数据. 默认此次row copy 完成"+
-			" 表: %v.%v. 最小值: %v, 最大值: %v",
-			common.CurrLine(), _primaryRangeValue.Schema, _primaryRangeValue.Table,
-			_primaryRangeValue.MinValue, _primaryRangeValue.MaxValue)
+		log.Warningf("%v: 警告. row copy 没有获取到表数据. 默认此次row copy 完成. 表: %v.%v. 最小值: %v, 最大值: %v",
+			common.CurrLine(), _primaryRangeValue.Schema, _primaryRangeValue.Table, _primaryRangeValue.MinValue, _primaryRangeValue.MaxValue)
 
 		return nil
 	}
@@ -441,22 +410,17 @@ func (this *RowCopy) ConsumePrimaryRangeValue(
 	// 向目标表插入数据
 	err = InsertRowCopyData(this.ConfigMap.Target.Host.String, int(this.ConfigMap.Target.Port.Int64), _primaryRangeValue.Schema, _primaryRangeValue.Table, rowCount, data)
 	if err != nil {
-		errMSG := fmt.Sprintf("%v: 失败. row copy 向目标数据库插入数据 表: %v.%v,"+
-			"最小值: %v, 最大值: %v. %v:%v. %v",
-			common.CurrLine(), _primaryRangeValue.Schema, _primaryRangeValue.Table,
-			_primaryRangeValue.MinValue, _primaryRangeValue.MaxValue,
+		errMSG := fmt.Sprintf("%v: 失败. row copy 向目标数据库插入数据 表: %v.%v, 最小值: %v, 最大值: %v. %v:%v. %v",
+			common.CurrLine(), _primaryRangeValue.Schema, _primaryRangeValue.Table, _primaryRangeValue.MinValue, _primaryRangeValue.MaxValue,
 			this.ConfigMap.Source.Host.String, int(this.ConfigMap.Source.Port.Int64), err)
 		return errors.New(errMSG)
 	}
 
-	log.Infof("%v: 完成. 协程%v, 范围 row copy 已经完成. 表: %v.%v. "+
-		"最小值: %v, 最大值 %v",
-		common.CurrLine(), _parallerTag, _primaryRangeValue.Schema,
-		_primaryRangeValue.Table, _primaryRangeValue.MinValue, _primaryRangeValue.MaxValue)
+	log.Infof("%v: 完成. 协程%v, 范围 row copy 已经完成. 表: %v.%v. 最小值: %v, 最大值 %v",
+		common.CurrLine(), _parallerTag, _primaryRangeValue.Schema, _primaryRangeValue.Table, _primaryRangeValue.MinValue, _primaryRangeValue.MaxValue)
 
 	// 通知删除缓存中的值
-	addOrDelete := NewAddOrDelete(_primaryRangeValue.Schema, _primaryRangeValue.Table,
-		_primaryRangeValue.TimestampHash, AOD_TYPE_DELETE, _primaryRangeValue)
+	addOrDelete := NewAddOrDelete(_primaryRangeValue.Schema, _primaryRangeValue.Table, _primaryRangeValue.TimestampHash, AOD_TYPE_DELETE, _primaryRangeValue)
 	this.AddOrDelWatingTagCompleteChan <- addOrDelete
 
 	return nil
@@ -557,8 +521,7 @@ ExistSaveProgress:
 					minMaxPrimaryRangeValue := this.RowCopyConsumeMinMaxValue[tableName]
 					maxData, ok := minMaxPrimaryRangeValue.Load("maxValue")
 					if !ok {
-						log.Errorf("%v 失败. 保存表 row copy 进度(%v)."+
-							"没有获取到已经消费的最大范围值. 将跳过该表进度保存",
+						log.Errorf("%v 失败. 保存表 row copy 进度(%v). 没有获取到已经消费的最大范围值. 将跳过该表进度保存",
 							common.CurrLine(), tableName)
 						continue
 					}
@@ -567,9 +530,7 @@ ExistSaveProgress:
 					maxPrimaryRangeValue := maxData.(*matemap.PrimaryRangeValue)
 					maxValueJson, err := common.Map2Json(maxPrimaryRangeValue.MaxValue)
 					if err != nil {
-						log.Errorf("%v: 失败. 保存表row copy 进度(%v). "+
-							"将进度数据转化为json失败. %v",
-							common.CurrLine(), tableName, err)
+						log.Errorf("%v: 失败. 保存表row copy 进度(%v). 将进度数据转化为json失败. %v", common.CurrLine(), tableName, err)
 						continue
 					}
 
@@ -581,23 +542,19 @@ ExistSaveProgress:
 
 					// 标记该表 row copy 完成
 					TagTableRowCopyComplete(this.ConfigMap.TaskUUID, schema, table)
-					log.Infof("%v: 完成. 标记表 row copy 完成. %v",
-						common.CurrLine(), tableName)
+					log.Infof("%v: 完成. 标记表 row copy 完成. %v", common.CurrLine(), tableName)
 				}
 
 				// 标记该任务 row copy 完成
 				TagTaskRowCopyComplete(this.ConfigMap.TaskUUID)
-				log.Infof("%v: 完成. 标记任务 row copy 完成. %v",
-					common.CurrLine(), this.ConfigMap.TaskUUID)
+				log.Infof("%v: 完成. 标记任务 row copy 完成. %v", common.CurrLine(), this.ConfigMap.TaskUUID)
 				break ExistSaveProgress
 			} else { // 保存缓存中最小的 row copy 进度数据
 				for _, tableName := range tableNames {
 					minMaxPrimaryRangeValue := this.RowCopyConsumeMinMaxValue[tableName]
 					minData, ok := minMaxPrimaryRangeValue.Load("minValue")
 					if !ok {
-						log.Errorf("%v 失败. 保存表 row copy 进度(%v)."+
-							"没有获取到已经消费的最大范围值. 将跳过该表进度保存",
-							common.CurrLine(), tableName)
+						log.Errorf("%v 失败. 保存表 row copy 进度(%v). 没有获取到已经消费的最大范围值. 将跳过该表进度保存", common.CurrLine(), tableName)
 						continue
 					}
 
@@ -605,9 +562,7 @@ ExistSaveProgress:
 					maxPrimaryRangeValue := minData.(*matemap.PrimaryRangeValue)
 					minValueJson, err := common.Map2Json(maxPrimaryRangeValue.MaxValue)
 					if err != nil {
-						log.Errorf("%v: 失败. 保存表row copy 进度(%v). "+
-							"将进度数据转化为json失败. %v",
-							common.CurrLine(), tableName, err)
+						log.Errorf("%v: 失败. 保存表row copy 进度(%v). 将进度数据转化为json失败. %v", common.CurrLine(), tableName, err)
 						continue
 					}
 
@@ -620,8 +575,7 @@ ExistSaveProgress:
 			}
 		case <-this.CloseSaveRowCopyProgressChan:
 			isClose = true
-			log.Warningf("%v: 警告, 接收到关闭保存 row copy 进度通知, 即将关闭该协程.",
-				common.CurrLine())
+			log.Warningf("%v: 警告, 接收到关闭保存 row copy 进度通知, 即将关闭该协程.", common.CurrLine())
 		}
 	}
 }

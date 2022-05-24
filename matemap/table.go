@@ -28,22 +28,22 @@ type Table struct {
 	SourceIgnoreColumns []int // 不进行同步的列
 	SourceUsefulColumns []int // 最终进行语句平凑操作的列, 最终使用的列
 
-	targetCreateTableSql          string // 创建目标表sql语句的 sql
-	targetDropTableSql            string // 删除目标表语句 sql
-	selFirstPKSqlTpl              string // 查询第一条记录  主键/唯一键 值 sql 模板
-	selLastPKSqlTpl               string // 查询最后一条记录  主键/唯一键 值 sql 模板
-	selPerBatchMaxPKSqlTpl        string // 每批查询表最大 主键/唯一键 值 sql 模板
-	selPerBatchSqlTpl             string // 每批查询获取数据的sql, row copy 所用 sql 模板
-	insIgrBatchSqlTpl             string // insert ignore into 批量 sql 模板
-	repPerBatchSqlTpl             string // replace into 批量 insert 数据 sql 模板
-	updSqlTpl                     string // update sql 模板
-	delSqlTpl                     string // delete sql 模板
-	selSourceRowCheckSqlTpl       string // 源实例 单行 checksum sql 模板
-	selTargetRowCheckSqlTpl       string // 目标 单行 checksum sql 模板
-	selSourceRowsCheckSqlTpl      string // 源实例 多行 checksum sql 模板
-	selTargetRowsCheckSqlTpl      string // 目标 多行 checksum sql 模板
-	selPerBatchSourcePKSqlTpl     string // 源实例每批查询主键值的sql, 用于checksum修复每行数据的时候使用
-	selSourceRowSqlTpl            string // 通过主键获取源表一行数据 sql 模板
+	targetCreateTableSql      string // 创建目标表sql语句的 sql
+	targetDropTableSql        string // 删除目标表语句 sql
+	selFirstPKSqlTpl          string // 查询第一条记录  主键/唯一键 值 sql 模板
+	selLastPKSqlTpl           string // 查询最后一条记录  主键/唯一键 值 sql 模板
+	selPerBatchMaxPKSqlTpl    string // 每批查询表最大 主键/唯一键 值 sql 模板
+	selPerBatchSqlTpl         string // 每批查询获取数据的sql, row copy 所用 sql 模板
+	insIgrBatchSqlTpl         string // insert ignore into 批量 sql 模板
+	repPerBatchSqlTpl         string // replace into 批量 insert 数据 sql 模板
+	updSqlTpl                 string // update sql 模板
+	delSqlTpl                 string // delete sql 模板
+	selSourceRowCheckSqlTpl   string // 源实例 单行 checksum sql 模板
+	selTargetRowCheckSqlTpl   string // 目标 单行 checksum sql 模板
+	selSourceRowsCheckSqlTpl  string // 源实例 多行 checksum sql 模板
+	selTargetRowsCheckSqlTpl  string // 目标 多行 checksum sql 模板
+	selPerBatchSourcePKSqlTpl string // 源实例每批查询主键值的sql, 用于checksum修复每行数据的时候使用
+	selSourceRowSqlTpl        string // 通过主键获取源表一行数据 sql 模板
 }
 
 // 初始化 源 列映射关系, 通过源列
@@ -117,10 +117,10 @@ func (this *Table) initTargetToSourceColumnNameMap() error {
 /* 初始化表所有的唯一键字段(包括主键), 通过给定的字段名
 Params:
     _uKColulmnNames: 指定的字段名
- */
+*/
 func (this *Table) InitSourceAllUKColumnsByNames(_uKColumnNames []string) error {
 	if len(_uKColumnNames) < 1 {
-		errMSG := fmt.Sprintf("%v: 初始化源表所有的唯一键字段失败, 没有指定唯一键. " +
+		errMSG := fmt.Sprintf("%v: 初始化源表所有的唯一键字段失败, 没有指定唯一键. "+
 			"这种情况, 可能是你的源表没有唯一键. 这不符合工具使用的要求. 请检查 %v:%v",
 			common.CurrLine(), this.SourceSchema, this.SourceName)
 		return errors.New(errMSG)
@@ -137,7 +137,7 @@ func (this *Table) InitSourceAllUKColumnsByNames(_uKColumnNames []string) error 
 
 func (this *Table) InitTargetAllUKColumnsBySourceUKNames(_sourceUKColumnNames []string) error {
 	if len(_sourceUKColumnNames) < 1 {
-		errMSG := fmt.Sprintf("%v: 初始化目标表所有的唯一键字段失败, 没有指定唯一键." +
+		errMSG := fmt.Sprintf("%v: 初始化目标表所有的唯一键字段失败, 没有指定唯一键."+
 			"这种情况, 可能是你的源表没有唯一键.这不符合工具使用的要求. 请检查 %v:%v",
 			common.CurrLine(), this.SourceSchema, this.SourceName)
 		return errors.New(errMSG)
@@ -582,7 +582,7 @@ SELECT RCR32(CONCAT(
 FROM xxx
 WHERE id = xxx
 使用 CONCAT 后的值: id#name#age
-  */
+*/
 func (this *Table) InitSelSourceRowChecksumSqlTpl() {
 	selectSql := `
         /* go-d-bus checksum row source */ SELECT CRC32(CONCAT(
@@ -646,7 +646,7 @@ SELECT SUM(RCR32(CONCAT(
 FROM xxx
 WHERE id = xxx
 使用 CONCAT 后的值: id#name#age
-  */
+*/
 func (this *Table) InitSelSourceRowsChecksumSqlTpl() {
 	selectSql := `
         /* go-d-bus checksum rows source */ SELECT SUM(CRC32(CONCAT(
@@ -767,8 +767,7 @@ Params:
     _rowCount: 行数
 */
 func (this *Table) GetInsIgrBatchSqlTpl(_rowCount int) string {
-	valuesPlaceholder := common.FormatValuesPlaceholder(len(this.SourceUsefulColumns),
-		_rowCount)
+	valuesPlaceholder := common.FormatValuesPlaceholder(len(this.SourceUsefulColumns), _rowCount)
 
 	return fmt.Sprintf(this.insIgrBatchSqlTpl, valuesPlaceholder)
 }
@@ -778,8 +777,7 @@ Params:
     _rowCount: 行数
 */
 func (this *Table) GetRepPerBatchSqlTpl(_rowCount int) string {
-	valuesPlaceholder := common.FormatValuesPlaceholder(len(this.SourceUsefulColumns),
-		_rowCount)
+	valuesPlaceholder := common.FormatValuesPlaceholder(len(this.SourceUsefulColumns), _rowCount)
 
 	return fmt.Sprintf(this.repPerBatchSqlTpl, valuesPlaceholder)
 }

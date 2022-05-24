@@ -72,9 +72,7 @@ func (this *ConfigMap) InitRunQuota() error {
 		return err
 	}
 	if task == nil {
-		errMsg := fmt.Sprintf("%v: 没有找到相关的默认运行参数. task UUID: %v",
-			common.CurrLine(), this.TaskUUID)
-		return errors.New(errMsg)
+		return fmt.Errorf("%v: 没有找到相关的默认运行参数. task UUID: %v", common.CurrLine(), this.TaskUUID)
 	}
 
 	this.RunQuota = task
@@ -91,16 +89,13 @@ func (this *ConfigMap) InitSource() error {
 		return err
 	}
 	if source == nil {
-		errMsg := fmt.Sprintf("%v: 没有找到源实例信息. task UUID: %v",
-			common.CurrLine(), this.TaskUUID)
-		return errors.New(errMsg)
+		return fmt.Errorf("%v: 没有找到源实例信息. task UUID: %v", common.CurrLine(), this.TaskUUID)
 	}
 
-	source.Password.String, err = common.Decrypt(source.Password.String)
+	srcPassword, err := common.Decrypt(source.Password.String)
 	if err != nil {
-		errMsg := fmt.Sprintf("%v: 实例密码解密失败: %v. task UUID: %v",
-			common.CurrLine(), err, this.TaskUUID)
-		return errors.New(errMsg)
+	} else {
+		source.Password.String = srcPassword
 	}
 
 	this.Source = source
@@ -117,16 +112,13 @@ func (this *ConfigMap) InitTarget() error {
 		return err
 	}
 	if target == nil {
-		errMsg := fmt.Sprintf("%v: 没有找到目标实例信息. task UUID: %v",
-			common.CurrLine(), this.TaskUUID)
-		return errors.New(errMsg)
+		return fmt.Errorf("%v: 没有找到目标实例信息. task UUID: %v", common.CurrLine(), this.TaskUUID)
 	}
 
-	target.Password.String, err = common.Decrypt(target.Password.String)
+	tagetPasword, err := common.Decrypt(target.Password.String)
 	if err != nil {
-		errMsg := fmt.Sprintf("%v: 实例密码解密失败: %v. task UUID: %v",
-			common.CurrLine(), err, this.TaskUUID)
-		return errors.New(errMsg)
+	} else {
+		target.Password.String = tagetPasword
 	}
 
 	this.Target = target
@@ -191,7 +183,7 @@ func (this *ConfigMap) SetSourceDBConfig() error {
 		Host:     this.Source.Host.String,
 		Port:     int(this.Source.Port.Int64),
 		// Database:          "",
-		CharSet:           "utf8,utf8mb4,latin1",
+		CharSet:           "utf8mb4",
 		MaxOpenConns:      500,
 		MaxIdelConns:      250,
 		TimeOut:           60,
@@ -215,7 +207,7 @@ func (this *ConfigMap) SetTargetDBConfig() error {
 		Host:     this.Target.Host.String,
 		Port:     int(this.Target.Port.Int64),
 		// Database:          "",
-		CharSet:           "utf8,utf8mb4,latin1",
+		CharSet:           "utf8mb4",
 		MaxOpenConns:      500,
 		MaxIdelConns:      250,
 		TimeOut:           60,

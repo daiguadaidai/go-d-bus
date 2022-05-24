@@ -1,6 +1,7 @@
 package mysqlapplybinlog
 
 import (
+	"context"
 	"fmt"
 	"github.com/cevaris/ordered_map"
 	"github.com/daiguadaidai/go-d-bus/common"
@@ -12,7 +13,6 @@ import (
 	"github.com/go-mysql-org/go-mysql/replication"
 	"github.com/juju/errors"
 	"github.com/outbrain/golib/log"
-	"golang.org/x/net/context"
 	"math/rand"
 	"sync"
 	"syscall"
@@ -178,8 +178,6 @@ func (this *ApplyBinlog) InitSyncer() {
 }
 
 func (this *ApplyBinlog) Start() {
-	defer this.WG.Done()
-
 	// 产生binlog event
 	this.WG.Add(1)
 	go this.ProduceEvent()
