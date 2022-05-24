@@ -1,16 +1,16 @@
 package service
 
 import (
+	"github.com/daiguadaidai/go-d-bus/common"
 	"github.com/daiguadaidai/go-d-bus/config"
 	"github.com/daiguadaidai/go-d-bus/matemap"
 	"github.com/daiguadaidai/go-d-bus/parser"
-	"github.com/outbrain/golib/log"
-	"sync"
-	mysqlrc "github.com/daiguadaidai/go-d-bus/service/mysqlrowcopy"
 	mysqlab "github.com/daiguadaidai/go-d-bus/service/mysqlapplybinlog"
 	mysqlcs "github.com/daiguadaidai/go-d-bus/service/mysqlchecksum"
-	"github.com/daiguadaidai/go-d-bus/common"
-	"fmt"
+	mysqlrc "github.com/daiguadaidai/go-d-bus/service/mysqlrowcopy"
+	"github.com/outbrain/golib/log"
+	"os"
+	"sync"
 )
 
 func StartMigration(_parser *parser.RunParser) {
@@ -28,6 +28,14 @@ func StartMigration(_parser *parser.RunParser) {
 	err = configMap.SetTargetDBConfig()
 	if err != nil {
 		log.Fatalf("%v", err)
+	}
+
+	// 如果没有设置binglog开始位点则show master status 找
+	if _parser.StartLogFile == "" || _parser.StartLogPos < 0 {
+		if err := _parser.SetStartBinlogInfoByHostAndPort(configMap.Source.Host.String, int(configMap.Source.Port.Int64)); err != nil {
+			log.Errorf("实时获取主库 位点信息出错. %v, 退出迁移", err.Error())
+			os.Exit(1)
+		}
 	}
 
 	// 初始化需要迁移的表
@@ -68,7 +76,6 @@ func StartMigration(_parser *parser.RunParser) {
 	}
 
 	// 开启了 checksum功能, 需要进行checksum
-	fmt.Println("----- enable checksum", _parser.EnableChecksum)
 	if _parser.EnableChecksum {
 		err = StartChecksum(_parser, configMap, wg, rowCopy2CheksumChan, notifySecondChecksum)
 		if err != nil {
@@ -87,9 +94,7 @@ Params:
     _configMap: 需要迁移的表的配置映射信息
     _wg: 并发参数
 */
-func StartApplyBinlog(_parser *parser.RunParser, _configMap *config.ConfigMap,
-	_wg *sync.WaitGroup) error {
-
+func StartApplyBinlog(_parser *parser.RunParser, _configMap *config.ConfigMap, _wg *sync.WaitGroup) error {
 
 	applyBinlog, err := mysqlab.NewApplyBinlog(_parser, _configMap, _wg)
 	if err != nil {
@@ -109,20 +114,20 @@ Params:
     _wg: 并发参数
 	_rowCopy2ChecksumChan: 行拷贝到checksum
 	_notifySecondChecksum: 通知可以进行二次checksum了
- */
+*/
 func StartRowCopy(_parser *parser.RunParser, _configMap *config.ConfigMap,
 	_wg *sync.WaitGroup, _rowCopy2ChecksumChan chan *matemap.PrimaryRangeValue,
 	_notifySecondChecksum chan bool) error {
 
 	isComplete, err := mysqlrc.TaskRowCopyIsComplete(_configMap.TaskUUID)
 	if err != nil {
-		log.Errorf("%v: 失败. 获取任务 row copy 是否完成失败." +
+		log.Errorf("%v: 失败. 获取任务 row copy 是否完成失败."+
 			"将不进行row copy行为. %v. %v",
 			common.CurrLine(), _configMap.TaskUUID, err)
 		return nil
 	}
 	if isComplete {
-		log.Warningf("%v: 警告. row copy 任务已经完成. " +
+		log.Warningf("%v: 警告. row copy 任务已经完成. "+
 			"不需要进行row copy 操作. %v",
 			common.CurrLine(), _configMap.TaskUUID)
 		return nil
@@ -146,7 +151,7 @@ Params:
     _wg: 并发参数
 	_rowCopy2ChecksumChan: 行拷贝到checksum
 	_notifySecondChecksum: 通知可以进行二次checksum了
- */
+*/
 func StartChecksum(_parser *parser.RunParser, _configMap *config.ConfigMap,
 	_wg *sync.WaitGroup, _rowCopy2ChecksumChan chan *matemap.PrimaryRangeValue,
 	_notifySecondChecksum chan bool) error {

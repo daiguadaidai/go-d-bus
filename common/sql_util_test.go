@@ -27,7 +27,7 @@ func TestCreateDropColumnSql(t *testing.T) {
 
 func TestFormatColumnNameStr(t *testing.T) {
 	columnNames := []string{"col1", "col2", "col3"}
-	fmt.Println(FormatColumnNameStr(columnNames))
+	fmt.Println(FormatColumnNameStr(columnNames, ""))
 }
 
 func TestFormatOrderByStr(t *testing.T) {
