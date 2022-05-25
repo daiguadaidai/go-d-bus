@@ -25,7 +25,6 @@ const (
 )
 
 type ApplyBinlog struct {
-	WG        *sync.WaitGroup
 	Parser    *parser.RunParser
 	ConfigMap *config.ConfigMap
 
@@ -88,14 +87,11 @@ Params:
     _configMap: 配置信息
     _wg: 并发控制参数
 */
-func NewApplyBinlog(_parser *parser.RunParser, _configMap *config.ConfigMap,
-	_wg *sync.WaitGroup) (*ApplyBinlog, error) {
-
+func NewApplyBinlog(_parser *parser.RunParser, _configMap *config.ConfigMap) (*ApplyBinlog, error) {
 	applyBinlog := new(ApplyBinlog)
 
 	applyBinlog.ConfigMap = _configMap
 	applyBinlog.Parser = _parser
-	applyBinlog.WG = _wg
 
 	// 初始化 需要迁移的表名映射信息
 	applyBinlog.MigrationTableNameMap = matemap.FindAllMigrationTableNameMap()
@@ -178,36 +174,41 @@ func (this *ApplyBinlog) InitSyncer() {
 }
 
 func (this *ApplyBinlog) Start() {
+	wg := new(sync.WaitGroup)
 	// 产生binlog event
-	this.WG.Add(1)
-	go this.ProduceEvent()
+	wg.Add(1)
+	go this.ProduceEvent(wg)
 
 	// 分配 binlog event 中每一行数据
-	this.WG.Add(1)
-	go this.DistributeEventRows()
+	wg.Add(1)
+	go this.DistributeEventRows(wg)
 
 	// 并发应用每一行数据
 	for i, _ := range this.Distribute2ApplyChans {
-		this.WG.Add(1)
-		go this.ConsumeEevetRows(i)
+		wg.Add(1)
+		go this.ConsumeEevetRows(wg, i)
 	}
 
 	// 循环记录应用进度
-	this.WG.Add(1)
-	go this.LoopSaveApplyBinlogProgress()
+	wg.Add(1)
+	go this.LoopSaveApplyBinlogProgress(wg)
 
 	// 循环获取暂停位点信息
-	this.WG.Add(1)
-	go this.LoopGetAndSetStopLogFilePos()
+	wg.Add(1)
+	go this.LoopGetAndSetStopLogFilePos(wg)
 
 	// 循环设置目标show master status信息(回滚信息)
-	this.WG.Add(1)
-	go this.LoopSaveTargetLogFilePos()
+	wg.Add(1)
+	go this.LoopSaveTargetLogFilePos(wg)
+
+	wg.Wait()
+
+	log.Infof("%v: 整个应用binlog完成", common.CurrLine())
 }
 
 // 开始产生binlog event
-func (this *ApplyBinlog) ProduceEvent() {
-	defer this.WG.Done()
+func (this *ApplyBinlog) ProduceEvent(wg *sync.WaitGroup) {
+	defer wg.Done()
 
 	log.Infof("%v: 开始解析binlog. 开始位点 = 解析为点 = 应用到位点: %v:%v",
 		common.CurrLine(), this.Parser.StartLogFile, this.Parser.StartLogPos)
@@ -244,13 +245,16 @@ func (this *ApplyBinlog) ProduceEvent() {
 
 	for {
 		ev, err := streamer.GetEvent(context.Background())
+		if err != nil {
+			log.Errorf("%v: 错误. 获取binlog event出错. %v", common.CurrLine(), err)
+			syscall.Exit(1)
+		}
 		this.ParseTimestamp = ev.Header.Timestamp // 设置当前binlog解析到的事件点
 		this.ParsedLogPos = ev.Header.LogPos      // 设置解析到的位点信息
 
 		// 判断是否有设置 停止位点信息. 和解析位点是否大于停止位点. 是的化则不进行binlog应用
 		for this.IsStopParseBinlogByStopLogFilePos() {
-			log.Warningf("%v: 检测到有设置停止位点信息. 并且解析到的位点(%v:%v) >= 停止位点(%v:%v). "+
-				"该迁移任务将停止解析binlog",
+			log.Warningf("%v: 检测到有设置停止位点信息. 并且解析到的位点(%v:%v) >= 停止位点(%v:%v). 该迁移任务将停止解析binlog",
 				common.CurrLine(), this.ParsedLogFile, this.ParsedLogPos, this.StopLogFile, this.StopLogPos)
 
 			time.Sleep(time.Second * 10)
@@ -261,8 +265,7 @@ func (this *ApplyBinlog) ProduceEvent() {
 		if err != nil {
 			produceErrCNT++
 			if produceErrCNT > this.Parser.ErrRetryCount {
-				log.Errorf("%v: 错误. 获取binlog event. 达到上线 %v 次. 将退出迁移. %v",
-					common.CurrLine(), produceErrCNT, err)
+				log.Errorf("%v: 错误. 获取binlog event. 达到上线 %v 次. 将退出迁移. %v", common.CurrLine(), produceErrCNT, err)
 
 				syscall.Exit(1)
 			}
@@ -290,17 +293,14 @@ func (this *ApplyBinlog) ProduceEvent() {
 			if this.IsApplyTable(schemaName, tableName) {
 				table, err := matemap.GetMigrationTableBySchemaTable(schemaName, tableName)
 				if err != nil {
-					log.Errorf("%v: 在解析binlog使用TableMapEvent时,"+
-						"获取需要迁移的表的元数据出错. %v.%v %v, 退出迁移",
+					log.Errorf("%v: 在解析binlog使用TableMapEvent时, 获取需要迁移的表的元数据出错. %v.%v %v, 退出迁移",
 						common.CurrLine(), schemaName, tableName, err)
 					syscall.Exit(1)
 				}
 
 				if len(table.SourceColumns) != int(e.ColumnCount) {
-					log.Warningf("%v: 警告. 发现表字段有变化. "+
-						"可能是有进行DDL. 重新生成该表元数据. %v:%v, 字段数 %v -> %v",
-						common.CurrLine(), schemaName, tableName,
-						len(table.SourceColumns), int(e.ColumnCount))
+					log.Warningf("%v: 警告. 发现表字段有变化. 可能是有进行DDL. 重新生成该表元数据. %v:%v, 字段数 %v -> %v",
+						common.CurrLine(), schemaName, tableName, len(table.SourceColumns), int(e.ColumnCount))
 
 					// 等待binlog应用完成后, 替换表元数据信息
 					this.WaitingApplyEventAndReplaceTableMap(schemaName, tableName)
@@ -320,8 +320,8 @@ func (this *ApplyBinlog) ProduceEvent() {
 }
 
 // 读取每个event, 并且分配每一行
-func (this *ApplyBinlog) DistributeEventRows() {
-	defer this.WG.Done()
+func (this *ApplyBinlog) DistributeEventRows(wg *sync.WaitGroup) {
+	defer wg.Done()
 	log.Infof("%v: 开始分配事件的每一行", common.CurrLine())
 
 	// 循环获取binglog事件
@@ -337,8 +337,7 @@ func (this *ApplyBinlog) DistributeEventRows() {
 				if err != nil {
 					errCNT++
 					if errCNT > this.Parser.ErrRetryCount {
-						log.Errorf("%v: 错误次数达到上线 %v 将退出迁移. %v",
-							common.CurrLine(), errCNT, err)
+						log.Errorf("%v: 错误次数达到上线 %v 将退出迁移. %v", common.CurrLine(), errCNT, err)
 						syscall.Exit(1)
 					}
 					log.Errorf("%v: 第%v次错误. %v", common.CurrLine(), err)
@@ -350,8 +349,7 @@ func (this *ApplyBinlog) DistributeEventRows() {
 				if err != nil {
 					errCNT++
 					if errCNT > this.Parser.ErrRetryCount {
-						log.Errorf("%v: 错误次数达到上线 %v 将退出迁移. %v",
-							common.CurrLine(), errCNT, err)
+						log.Errorf("%v: 错误次数达到上线 %v 将退出迁移. %v", common.CurrLine(), errCNT, err)
 						syscall.Exit(1)
 					}
 					log.Errorf("%v: 第%v次错误. %v", common.CurrLine(), err)
@@ -363,8 +361,7 @@ func (this *ApplyBinlog) DistributeEventRows() {
 				if err != nil {
 					errCNT++
 					if errCNT > this.Parser.ErrRetryCount {
-						log.Errorf("%v: 错误次数达到上线 %v 将退出迁移. %v",
-							common.CurrLine(), errCNT, err)
+						log.Errorf("%v: 错误次数达到上线 %v 将退出迁移. %v", common.CurrLine(), errCNT, err)
 						syscall.Exit(1)
 					}
 					log.Errorf("%v: 第%v次错误. %v", common.CurrLine(), err)
@@ -441,11 +438,7 @@ func (this *ApplyBinlog) DistributeUpdateEventRows(_binlogEventPos *BinlogEventP
 	this.IncrNeedApplyEventCount()
 
 	// 添加该事件的行数
-	addOrDeleteNeedApplyBinlog := NewAddOrDeleteNeedApplyBinlog(
-		_binlogEventPos.GetLogFilePosTimeStamp(),
-		AODNAB_TYPE_ADD,
-		rowCount,
-	)
+	addOrDeleteNeedApplyBinlog := NewAddOrDeleteNeedApplyBinlog(_binlogEventPos.GetLogFilePosTimeStamp(), AODNAB_TYPE_ADD, rowCount)
 	this.AddOrDeleteNeedApplyBinlogChan <- addOrDeleteNeedApplyBinlog
 
 	for i := 0; i < rowCount; i++ {
@@ -519,8 +512,8 @@ func (this *ApplyBinlog) DistributeDeleteEventRows(_binlogEventPos *BinlogEventP
 Params:
 	_slot: 通道号
 */
-func (this *ApplyBinlog) ConsumeEevetRows(_slot int) {
-	this.WG.Done()
+func (this *ApplyBinlog) ConsumeEevetRows(wg *sync.WaitGroup, _slot int) {
+	defer wg.Done()
 	log.Infof("%v: 协程%v. 开始应用每一行.", common.CurrLine(), _slot)
 
 	for binlogRowInfo := range this.Distribute2ApplyChans[_slot] {
@@ -605,22 +598,14 @@ func (this *ApplyBinlog) ConsumeInsertRows(_binlogRowInfo *BinlogRowInfo) error 
 		this.ConfigMap.Target.Host.String, int(this.ConfigMap.Target.Port.Int64))
 	if err != nil {
 		errMSG := fmt.Sprintf("%v: 获取目标数据库实例出错 %v:%v. %v",
-			common.CurrLine(), this.ConfigMap.Target.Host.String,
-			this.ConfigMap.Target.Port.Int64, err)
+			common.CurrLine(), this.ConfigMap.Target.Host.String, this.ConfigMap.Target.Port.Int64, err)
 		return errors.New(errMSG)
 	}
 
 	// 开启事物执行sql
-	tx, err := instance.DB.Begin()
+	_, err = instance.DB.Exec(table.GetRepPerBatchSqlTpl(1), afterRow...)
 	if err != nil {
 		return err
-	}
-	_, err = tx.Exec(table.GetRepPerBatchSqlTpl(1), afterRow...)
-	if err != nil {
-		tx.Rollback()
-		return err
-	} else {
-		tx.Commit()
 	}
 
 	return nil
@@ -634,8 +619,7 @@ func (this *ApplyBinlog) ConsumeUpdateRows(_binlogRowInfo *BinlogRowInfo) error 
 	// 获取需要迁移的表的元信息
 	table, err := matemap.GetMigrationTableBySchemaTable(_binlogRowInfo.Schema, _binlogRowInfo.Table)
 	if err != nil {
-		errMSG := fmt.Sprintf("%v: 获取迁移的表失败(应用行insert). %v",
-			common.CurrLine(), err)
+		errMSG := fmt.Sprintf("%v: 获取迁移的表失败(应用行insert). %v", common.CurrLine(), err)
 		return errors.New(errMSG)
 	}
 
@@ -644,24 +628,21 @@ func (this *ApplyBinlog) ConsumeUpdateRows(_binlogRowInfo *BinlogRowInfo) error 
 		// 删除数据
 		err := this.ConsumeDeleteRows(_binlogRowInfo)
 		if err != nil {
-			errMSG := fmt.Sprintf("%v: 消费update行, update 转化为 delete/insert(delete). %v",
-				common.CurrLine(), err)
+			errMSG := fmt.Sprintf("%v: 消费update行, update 转化为 delete/insert(delete). %v", common.CurrLine(), err)
 			return errors.New(errMSG)
 		}
 
 		// 插入数据
 		err = this.ConsumeInsertRows(_binlogRowInfo)
 		if err != nil {
-			errMSG := fmt.Sprintf("%v: 消费update行, update 转化为 delete/insert(insert). %v",
-				common.CurrLine(), err)
+			errMSG := fmt.Sprintf("%v: 消费update行, update 转化为 delete/insert(insert). %v", common.CurrLine(), err)
 			return errors.New(errMSG)
 		}
 	} else { // 如果唯一键列值没有修改. 则变成insert
 		// 插入数据
 		err = this.ConsumeInsertRows(_binlogRowInfo)
 		if err != nil {
-			errMSG := fmt.Sprintf("%v: 消费update行, update 转化为 insert. %v",
-				common.CurrLine(), err)
+			errMSG := fmt.Sprintf("%v: 消费update行, update 转化为 insert. %v", common.CurrLine(), err)
 			return errors.New(errMSG)
 		}
 	}
@@ -696,23 +677,16 @@ func (this *ApplyBinlog) ConsumeDeleteRows(_binlogRowInfo *BinlogRowInfo) error 
 	}
 
 	// 开启事物执行sql
-	tx, err := instance.DB.Begin()
+	_, err = instance.DB.Exec(table.GetDelSqlTpl(), beforeRow...)
 	if err != nil {
 		return err
-	}
-	_, err = tx.Exec(table.GetDelSqlTpl(), beforeRow...)
-	if err != nil {
-		tx.Rollback()
-		return err
-	} else {
-		tx.Commit()
 	}
 
 	return nil
 }
 
-func (this *ApplyBinlog) LoopSaveApplyBinlogProgress() {
-	defer this.WG.Done()
+func (this *ApplyBinlog) LoopSaveApplyBinlogProgress(wg *sync.WaitGroup) {
+	defer wg.Done()
 
 	saveDelayTicker := time.NewTicker(time.Second * 5)
 	saveBinlogProgressTicker := time.NewTicker(time.Second * 5)
@@ -821,8 +795,8 @@ func (this *ApplyBinlog) LoopSaveApplyBinlogProgress() {
 }
 
 // 重新去数据库中获取一下stop位点信息
-func (this *ApplyBinlog) LoopGetAndSetStopLogFilePos() {
-	defer this.WG.Done()
+func (this *ApplyBinlog) LoopGetAndSetStopLogFilePos(wg *sync.WaitGroup) {
+	defer wg.Done()
 	for {
 		this.StopLogFile, this.StopLogPos = GetStopLogFilePos(this.Parser.TaskUUID)
 		log.Infof("%v: 获取停止位点信息. %v:%v",
@@ -832,8 +806,9 @@ func (this *ApplyBinlog) LoopGetAndSetStopLogFilePos() {
 }
 
 // 循环获取目标实例的master位点信息
-func (this *ApplyBinlog) LoopSaveTargetLogFilePos() {
-	defer this.WG.Done()
+func (this *ApplyBinlog) LoopSaveTargetLogFilePos(wg *sync.WaitGroup) {
+	defer wg.Done()
+
 	for _ = range this.NotifySaveTargetLogFilePos {
 		// 获取 show master status 信息
 		logFile, logPos, err := ShowMasterStatus(this.ConfigMap.Target.Host.String,

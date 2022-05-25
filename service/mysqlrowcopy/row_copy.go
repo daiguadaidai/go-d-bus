@@ -9,6 +9,7 @@ import (
 	"github.com/daiguadaidai/go-d-bus/parser"
 	"github.com/juju/errors"
 	"github.com/outbrain/golib/log"
+	"go.uber.org/atomic"
 	"runtime/debug"
 	"strings"
 	"sync"
@@ -17,7 +18,6 @@ import (
 )
 
 type RowCopy struct {
-	WG        *sync.WaitGroup
 	Parser    *parser.RunParser
 	ConfigMap *config.ConfigMap
 
@@ -61,7 +61,7 @@ type RowCopy struct {
 	AddOrDelWatingTagCompleteChan chan *AddOrDelete
 
 	// RowCopy消费并发数
-	RowCopyComsumerCount      int
+	RowCopyComsumerCount      atomic.Int64
 	RowCopyConsumerCountMutex sync.RWMutex
 	RowCopyConsumeMinMaxValue map[string]sync.Map // 用于保存当前已经消费的最小的和最大的主键消费值
 
@@ -87,7 +87,6 @@ Params
 func NewRowCopy(
 	_parser *parser.RunParser,
 	_configMap *config.ConfigMap,
-	_wg *sync.WaitGroup,
 	_toChecksumChan chan *matemap.PrimaryRangeValue,
 	_notifySecondChecksum chan bool,
 ) (*RowCopy, error) {
@@ -97,7 +96,6 @@ func NewRowCopy(
 	// 初始化配置控制信息
 	rowCopy.ConfigMap = _configMap
 	rowCopy.Parser = _parser
-	rowCopy.WG = _wg
 
 	// 初始化 需要迁移的表名映射信息
 	rowCopy.MigrationTableNameMap = matemap.FindAllMigrationTableNameMap()
@@ -182,33 +180,39 @@ func NewRowCopy(
 
 // 开始进行row copy
 func (this *RowCopy) Start() {
-	defer this.WG.Done()
+	wg := new(sync.WaitGroup)
 
 	// 循环生成 row copy 需要的主键值, 并将值放入通道中PrimaryRangeValueChan
-	this.WG.Add(1)
-	go this.LoopGeneratePrimaryRangeValue()
+	wg.Add(1)
+	go this.LoopGeneratePrimaryRangeValue(wg)
 
 	// 消费 PrimaryRangeValueChan 通道中的主键方位值
 	log.Infof("%v: 设置了 %v 个并发执行 row copy 操作.", common.CurrLine(), this.Parser.RowCopyParaller)
-	this.RowCopyComsumerCount = this.Parser.RowCopyParaller // 记录当前有多少个 row copy 并发
+	this.RowCopyComsumerCount.Add(int64(this.Parser.RowCopyParaller)) // 记录当前有多少个 row copy 并发
 	for parallerTag := 0; parallerTag < this.Parser.RowCopyParaller; parallerTag++ {
-		this.WG.Add(1)
-		go this.LoopConsumePrimaryRangeValue(parallerTag)
+		wg.Add(1)
+		go this.LoopConsumePrimaryRangeValue(wg, parallerTag)
 	}
 
 	// 循环, 缓存和删除主键值
-	this.WG.Add(1)
-	go this.LoopAddOrDeleteCache()
+	wg.Add(1)
+	go this.LoopAddOrDeleteCache(wg)
 
 	// 循环保存 row copy 进度
-	this.WG.Add(1)
-	go this.LoopSaveRowCopyProgress()
+	wg.Add(1)
+	go this.LoopSaveRowCopyProgress(wg)
+
+	wg.Wait()
+
+	log.Infof("%v, 整个row copy完成.", common.CurrLine())
 }
 
 // 循环生成主键值
-func (this *RowCopy) LoopGeneratePrimaryRangeValue() {
-	defer close(this.PrimaryRangeValueChan)
-	defer this.WG.Done()
+func (this *RowCopy) LoopGeneratePrimaryRangeValue(wg *sync.WaitGroup) {
+	defer func() {
+		close(this.PrimaryRangeValueChan)
+		wg.Done()
+	}()
 
 	// 当前错误重试次数
 	errRetryCount := 0
@@ -226,7 +230,7 @@ func (this *RowCopy) LoopGeneratePrimaryRangeValue() {
 			continue
 		}
 		if ok { // 已经完成所有的生成生成主键值
-			return
+			break
 		}
 
 		errRetryCount = 0
@@ -316,17 +320,19 @@ func (this *RowCopy) GeneratePrimaryRangeValue() (bool, error) {
 Params:
     _parallerTag: 并发标签, 代表是第几个并发协程的操作
 */
-func (this *RowCopy) LoopConsumePrimaryRangeValue(_parallerTag int) {
-	defer this.WG.Done()
+func (this *RowCopy) LoopConsumePrimaryRangeValue(wg *sync.WaitGroup, _parallerTag int) {
+	defer wg.Done()
 	defer func() { // 完成后, 协程数减1
-		this.RowCopyConsumerCountMutex.Lock()
-		this.RowCopyComsumerCount--
-		if this.RowCopyComsumerCount == 0 { // 如果都消费完了,可以关闭掉row copy 主键处理的缓存
+		this.RowCopyComsumerCount.Dec()
+		if this.RowCopyComsumerCount.Load() == 0 { // 如果都消费完了,可以关闭掉row copy 主键处理的缓存
 			close(this.AddOrDelWatingTagCompleteChan)
-			log.Infof("%v: row copy 完成, 通知可以进行二次校验了", common.CurrLine())
-			this.NotifySecondChecksum <- true // 通知checksum可以进行二次校验了
+			if this.Parser.EnableChecksum {
+				close(this.ToChecksumChan)
+				log.Infof("%v: row copy 完成, 关闭 checksum 接受通道", common.CurrLine())
+				this.NotifySecondChecksum <- true // 通知checksum可以进行二次校验了
+				log.Infof("%v: row copy 完成, 通知可以进行二次校验了", common.CurrLine())
+			}
 		}
-		this.RowCopyConsumerCountMutex.Unlock()
 	}()
 
 	log.Infof("%v: 成功. 启动第 %v 个并发进行消费", common.CurrLine(), _parallerTag)
@@ -429,8 +435,8 @@ func (this *RowCopy) ConsumePrimaryRangeValue(
 /* 将刚刚生成的 row copy 主键值 cache起来
    将已经完成的 row copy 主键值 从cache中删除
 */
-func (this *RowCopy) LoopAddOrDeleteCache() {
-	defer this.WG.Done()
+func (this *RowCopy) LoopAddOrDeleteCache(wg *sync.WaitGroup) {
+	defer wg.Done()
 	defer func() { // 通关闭保存 row copy 进度 协程
 		this.CloseSaveRowCopyProgressChan <- true
 	}()
@@ -502,8 +508,8 @@ func (this *RowCopy) LoopAddOrDeleteCache() {
 }
 
 // 循环保存当前row copy 进度
-func (this *RowCopy) LoopSaveRowCopyProgress() {
-	defer this.WG.Done()
+func (this *RowCopy) LoopSaveRowCopyProgress(wg *sync.WaitGroup) {
+	defer wg.Done()
 
 	tableNames := make([]string, 0, 1)
 	for tableName, _ := range this.RowCopyConsumeMinMaxValue {
@@ -512,6 +518,7 @@ func (this *RowCopy) LoopSaveRowCopyProgress() {
 
 	isClose := false
 	ticker := time.NewTicker(time.Second * 5)
+	defer ticker.Stop()
 ExistSaveProgress:
 	for {
 		select {

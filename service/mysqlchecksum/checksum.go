@@ -1,31 +1,30 @@
 package mysqlchecksum
 
 import (
-	"github.com/daiguadaidai/go-d-bus/matemap"
-	"github.com/daiguadaidai/go-d-bus/parser"
-	"github.com/daiguadaidai/go-d-bus/config"
-	"sync"
-	"github.com/outbrain/golib/log"
-	"github.com/daiguadaidai/go-d-bus/common"
-	"time"
-	"syscall"
-	"github.com/daiguadaidai/go-d-bus/service/mysqlrowcopy"
 	"fmt"
+	"github.com/daiguadaidai/go-d-bus/common"
+	"github.com/daiguadaidai/go-d-bus/config"
+	"github.com/daiguadaidai/go-d-bus/matemap"
 	"github.com/daiguadaidai/go-d-bus/model"
+	"github.com/daiguadaidai/go-d-bus/parser"
+	"github.com/daiguadaidai/go-d-bus/service/mysqlrowcopy"
 	"github.com/juju/errors"
+	"github.com/outbrain/golib/log"
+	"sync"
+	"syscall"
+	"time"
 )
 
 // 对MySQL数据进行校验
 type Checksum struct {
-	WG        *sync.WaitGroup
 	Parser    *parser.RunParser
 	ConfigMap *config.ConfigMap
 
-	ChecksumRowsChan chan *matemap.PrimaryRangeValue // 进行多行校验的chan
+	ChecksumRowsChan     chan *matemap.PrimaryRangeValue // 进行多行校验的chan
 	NotifySecondChecksum chan bool
-	FixDiffRecordChan chan model.DataChecksum // 传输fix数据的chan
+	FixDiffRecordChan    chan model.DataChecksum // 传输fix数据的chan
 
-	NeedFixRecordCounter int
+	NeedFixRecordCounter        int
 	NeedFixRecordCounterRWMutex sync.RWMutex
 }
 
@@ -37,13 +36,15 @@ Params
 	_checksumRowsChan: row copy 完成通知 checksum 的 checksum chan
 	_notifySecondChecksum: 通知可以进行第二次checksum
 */
-func NewChecksum(_parser *parser.RunParser, _configMap *config.ConfigMap,
-	_wg *sync.WaitGroup, _checksumRowsChan chan *matemap.PrimaryRangeValue,
-	_nodifySecondChecksum chan bool) (*Checksum, error) {
+func NewChecksum(
+	_parser *parser.RunParser,
+	_configMap *config.ConfigMap,
+	_checksumRowsChan chan *matemap.PrimaryRangeValue,
+	_nodifySecondChecksum chan bool,
+) (*Checksum, error) {
 
 	checksum := new(Checksum)
 
-	checksum.WG = _wg
 	checksum.Parser = _parser
 	checksum.ConfigMap = _configMap
 
@@ -57,30 +58,34 @@ func NewChecksum(_parser *parser.RunParser, _configMap *config.ConfigMap,
 }
 
 func (this *Checksum) Start() {
-	defer this.WG.Done()
+	wg := new(sync.WaitGroup)
 
 	// 并发进行第一波的checksum
 	for parallerTag := 0; parallerTag < this.Parser.ChecksumParaller; parallerTag++ {
-		this.WG.Add(1)
-		go this.LoopFirstChecksum(parallerTag)
+		wg.Add(1)
+		go this.LoopFirstChecksum(wg, parallerTag)
 	}
 
 	// 获取二次校验需要的数据
-	this.WG.Add(1)
-	go this.EmitDiffRecords()
+	wg.Add(1)
+	go this.EmitDiffRecords(wg)
 
 	// 并发修复校验数据
 	for parallerTag := 0; parallerTag < this.Parser.ChecksumFixParaller; parallerTag++ {
-		this.WG.Add(1)
-		go this.LoopFixDiffRows(parallerTag)
+		wg.Add(1)
+		go this.LoopFixDiffRows(wg, parallerTag)
 	}
+
+	wg.Wait()
+
+	log.Infof("%v: checksum任务总体完成", common.CurrLine())
 }
 
 /* 循环进行checksum校验
-	_parallerTag: 协程编号
- */
-func (this *Checksum) LoopFirstChecksum(_parallerTag int) {
-	defer this.WG.Done()
+_parallerTag: 协程编号
+*/
+func (this *Checksum) LoopFirstChecksum(wg *sync.WaitGroup, _parallerTag int) {
+	defer wg.Done()
 
 	log.Infof("%v: 开始进行第一波数据校验, 启动协程%v", common.CurrLine(), _parallerTag)
 
@@ -112,8 +117,7 @@ func (this *Checksum) LoopFirstChecksum(_parallerTag int) {
 				}
 				// 如果保存不一致数据失败, 并达到上线, 退出程序
 				if saveDiffRecordError {
-					log.Errorf("%v: 错误, 进行checksum错误(发现多上数据不一致, 并且保存到数据库失败), " +
-						"并且重试次数已经达到上线:%v. 将退出迁移. %v",
+					log.Errorf("%v: 错误, 进行checksum错误(发现多上数据不一致, 并且保存到数据库失败), 并且重试次数已经达到上线:%v. 将退出迁移. %v",
 						common.CurrLine(), this.Parser.ErrRetryCount, this.Parser.TaskUUID)
 					syscall.Exit(1)
 				}
@@ -125,8 +129,7 @@ func (this *Checksum) LoopFirstChecksum(_parallerTag int) {
 
 		if isError {
 			// 只有发生了错误, 并且重试了指定的次数还是有错, 才会走到这一步. 直接就退出迁移了
-			log.Errorf("%v: 错误, 进行多行数据checksum错误(第一波), " +
-				"并且重试次数已经达到上线:%v. 将退出迁移. %v",
+			log.Errorf("%v: 错误, 进行多行数据checksum错误(第一波), 并且重试次数已经达到上线:%v. 将退出迁移. %v",
 				common.CurrLine(), this.Parser.ErrRetryCount, this.Parser.TaskUUID)
 			syscall.Exit(1)
 		}
@@ -140,7 +143,7 @@ Params:
 Return:
     1. 是否一致
     2. 错误
- */
+*/
 func (this *Checksum) RowsChecksum(
 	_primaryRangeValue *matemap.PrimaryRangeValue,
 	_parallerTag int,
@@ -172,7 +175,7 @@ func (this *Checksum) RowsChecksum(
 
 	// 3. 比较 源和目标的值是否相等, 不相等则记录到数据
 	if sourceChecksumCode != targetChecksumCode {
-		log.Warningf("%v: checksum 协程%v. 多行数据校验, 发现不一致数据. " +
+		log.Warningf("%v: checksum 协程%v. 多行数据校验, 发现不一致数据. "+
 			"%v:%v. min:%v, max:%v",
 			common.CurrLine(), _parallerTag, _primaryRangeValue.Schema, _primaryRangeValue.Table,
 			_primaryRangeValue.MinValue, _primaryRangeValue.MaxValue)
@@ -187,14 +190,15 @@ func (this *Checksum) RowsChecksum(
 }
 
 // 从数据库中获取需要再次校验的数据
-func (this *Checksum) EmitDiffRecords() {
-	defer this.WG.Done()
+func (this *Checksum) EmitDiffRecords(wg *sync.WaitGroup) {
+	defer wg.Done()
 
-    // 一进来就进行一次判断 任务 row copy 是否完成
+	// 一进来就进行一次判断 任务 row copy 是否完成
 	firstCheckRowCopyComplete := make(chan bool, 2) // 容量设置成2为了防止程序hang在通道这边
 	firstCheckRowCopyComplete <- true
 
-	ticker := time.NewTicker(time.Second * 60) // 每分钟定时器
+	ticker := time.NewTicker(time.Second * 5) // 每分钟定时器
+	defer ticker.Stop()
 
 	// 判断是否能够直接进行row copy 操作
 	// 判断有两种办法:
@@ -226,9 +230,10 @@ CHECK_TASK_ROW_COPY_COMPLETE_LOOP:
 	}
 
 	// 能到这里, 说明就能开始进行第二波获取所有的不一致数据了
+checkSecondCheckSumLoop:
 	for {
 		select {
-		case <-ticker.C: // 每60s进行检测一次看看是不是还有为修复的数据
+		case <-ticker.C: // 每60s进行检测一次看看是不是还有未修复的数据
 			if this.GetNeedFixRecordCounter() > 0 {
 				log.Warningf("%v: 还有需要修复的数据未完成. 60s 后再进行获取新的未修复数据",
 					common.CurrLine())
@@ -239,7 +244,7 @@ CHECK_TASK_ROW_COPY_COMPLETE_LOOP:
 			var records []model.DataChecksum
 			var err error
 
-			for i := 0; i<this.Parser.ErrRetryCount; i++ {
+			for i := 0; i < this.Parser.ErrRetryCount; i++ {
 				// 1. 获取所有不一致数据
 				records, err = FindNoFixDiffRecords(this.ConfigMap.TaskUUID)
 				if err != nil {
@@ -248,6 +253,10 @@ CHECK_TASK_ROW_COPY_COMPLETE_LOOP:
 					isError = true
 					time.Sleep(time.Second)
 					continue
+				}
+				if len(records) == 0 {
+					close(this.FixDiffRecordChan)
+					break checkSecondCheckSumLoop
 				}
 
 				// 2. 将不一致数据记录发送通知
@@ -271,9 +280,9 @@ CHECK_TASK_ROW_COPY_COMPLETE_LOOP:
 /* 进行修复不同的行
 Params:
 	_parallerTag: 并发标记
- */
-func (this *Checksum) LoopFixDiffRows(_parallerTag int) {
-	defer this.WG.Done()
+*/
+func (this *Checksum) LoopFixDiffRows(wg *sync.WaitGroup, _parallerTag int) {
+	defer wg.Done()
 
 	log.Infof("%v: 开始修复数据, 启动协程%v", common.CurrLine(), _parallerTag)
 
@@ -281,7 +290,7 @@ func (this *Checksum) LoopFixDiffRows(_parallerTag int) {
 		isError := false
 
 		// 进行再次数据校验已经修复
-		for i:=0; i<this.Parser.ErrRetryCount; i++ {
+		for i := 0; i < this.Parser.ErrRetryCount; i++ {
 			err := this.FixDiffRows(diffRecord, _parallerTag)
 			if err != nil {
 				log.Errorf("%v: %v", common.CurrLine(), err)
@@ -304,7 +313,7 @@ func (this *Checksum) LoopFixDiffRows(_parallerTag int) {
 Params:
 	_diffRecord: 不一致数据,
 	_parallerTag: 协程号
- */
+*/
 func (this *Checksum) FixDiffRows(_diffRecord model.DataChecksum, _parallerTag int) error {
 	// 获取需要迁移的表的元数据
 	table, err := matemap.GetMigrationTableBySchemaTable(_diffRecord.SourceSchema.String,
@@ -359,7 +368,7 @@ func (this *Checksum) FixDiffRows(_diffRecord model.DataChecksum, _parallerTag i
 Params:
 	_primaryRangeValue: 修复的数据范围值
 	_parallerTag: 并发标记
- */
+*/
 func (this *Checksum) FixDiffRowsStepFix(
 	_primaryRangeValue *matemap.PrimaryRangeValue,
 	_table *matemap.Table,
@@ -398,7 +407,7 @@ func (this *Checksum) FixDiffRowsStepFix(
 				err = DeleteTargetRow(this.ConfigMap.Target.Host.String,
 					int(this.ConfigMap.Target.Port.Int64), pkValues, _table)
 				if err != nil {
-					errMSG := fmt.Sprintf("%v: 修复数据, 删除目标行失败. " +
+					errMSG := fmt.Sprintf("%v: 修复数据, 删除目标行失败. "+
 						"%v.%v -> %v.%v. Primary: %v. %v",
 						common.CurrLine(), _table.SourceSchema, _table.SourceName, _table.TargetSchema,
 						_table.TargetName, pkValues, err)
@@ -413,7 +422,7 @@ func (this *Checksum) FixDiffRowsStepFix(
 				sourceRow, err := GetSourceRowByPK(this.ConfigMap.Source.Host.String,
 					int(this.ConfigMap.Source.Port.Int64), pkValues, _table)
 				if err != nil {
-					errMSG := fmt.Sprintf("%v: 数据不一致. 正在修复数据." +
+					errMSG := fmt.Sprintf("%v: 数据不一致. 正在修复数据."+
 						" 通过主键值获取源表数据失败. %v.%v. %v. %v",
 						common.CurrLine(), _table.SourceSchema, _table.SourceName, pkValues, err)
 					return errors.New(errMSG)
@@ -429,7 +438,7 @@ func (this *Checksum) FixDiffRowsStepFix(
 				err = ReplaceTargetRow(this.ConfigMap.Target.Host.String,
 					int(this.ConfigMap.Target.Port.Int64), sourceRow, _table)
 				if err != nil {
-					errMSG := fmt.Sprintf("%v: 数据不一致, 正在修复数据." +
+					errMSG := fmt.Sprintf("%v: 数据不一致, 正在修复数据."+
 						"对目标表进行Replace into时失败. %v.%v -> %v.%v. %v. %v",
 						common.CurrLine(), _table.SourceSchema, _table.SourceName, _table.TargetSchema,
 						_table.TargetName, pkValues, err)
@@ -444,5 +453,3 @@ func (this *Checksum) FixDiffRowsStepFix(
 
 	return nil
 }
-
-
