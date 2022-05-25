@@ -51,7 +51,7 @@ func GetMigrationTable(_key string) (*Table, error) {
 Params:
 	_key: map的key
 	_table: 需要迁移的table
- */
+*/
 func SetMigrationTableMap(_key string, _table *Table) {
 	migrationTableMap.Store(_key, _table)
 }
@@ -129,14 +129,12 @@ func NewTable(_configMap *config.ConfigMap, _schemaName string, _tableName strin
 		return nil, nil
 	}
 	table.SourceColumns = sourceColumns
-	log.Infof("%v: 成功. 获取所有的(源)字段, %v.%v %v", common.CurrLine(),
-		table.SourceSchema, table.SourceName)
+	log.Infof("%v: 成功. 获取所有的(源)字段, %v.%v", common.CurrLine(), table.SourceSchema, table.SourceName)
 
 	// 通过 源 columns 生成目标 columns, 只要 sourceColumns 有值, targetColumns 一定有值
 	table.TargetColumns = GetTargetTableColumnBySourceColumns(
 		_configMap, table.SourceSchema, table.SourceName, sourceColumns)
-	log.Infof("%v: 成功. 生成(目标)字段, 通过源字段, %v.%v", common.CurrLine(),
-		table.SourceSchema, table.SourceName)
+	log.Infof("%v: 成功. 生成(目标)字段, 通过源字段, %v.%v", common.CurrLine(), table.SourceSchema, table.SourceName)
 
 	// 初始化列的名相关映射信息
 	err = table.InitColumnMapInfo()
@@ -144,8 +142,7 @@ func NewTable(_configMap *config.ConfigMap, _schemaName string, _tableName strin
 		return nil, err
 	}
 	log.Infof("%v: 成功. 生成 源和目标 字段相关映射信息. %v.%v <-> %v.%v",
-		common.CurrLine(), table.SourceSchema, table.SourceName, table.TargetSchema,
-		table.TargetName)
+		common.CurrLine(), table.SourceSchema, table.SourceName, table.TargetSchema, table.TargetName)
 
 	// 添加不进行迁移的列
 	ignoreColumnNames := _configMap.GetIgnoreColumnsBySchemaAndTable(table.SourceSchema, table.SourceName)
