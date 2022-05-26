@@ -3,11 +3,15 @@ package service
 import (
 	"github.com/daiguadaidai/go-d-bus/common"
 	"github.com/daiguadaidai/go-d-bus/config"
+	"github.com/daiguadaidai/go-d-bus/dao"
+	"github.com/daiguadaidai/go-d-bus/gdbc"
 	"github.com/daiguadaidai/go-d-bus/matemap"
+	"github.com/daiguadaidai/go-d-bus/model"
 	"github.com/daiguadaidai/go-d-bus/parser"
 	mysqlab "github.com/daiguadaidai/go-d-bus/service/mysqlapplybinlog"
 	mysqlcs "github.com/daiguadaidai/go-d-bus/service/mysqlchecksum"
 	mysqlrc "github.com/daiguadaidai/go-d-bus/service/mysqlrowcopy"
+	"github.com/daiguadaidai/go-d-bus/setting"
 	"github.com/outbrain/golib/log"
 	"sync"
 )
@@ -19,14 +23,20 @@ func StartMigration(_parser *parser.RunParser) {
 		log.Fatalf("%v", err)
 	}
 
-	// 设置源和目标实例配置信息
-	err = configMap.SetSourceDBConfig()
-	if err != nil {
-		log.Fatalf("%v", err)
+	// 获取随机其中一个schemaMap
+	randSchemaMap := configMap.GetRandSchemaMap()
+	if randSchemaMap == nil {
+		log.Fatalf("随机获取一个数据库映射信息失败, 没有数据库映射信息")
 	}
-	err = configMap.SetTargetDBConfig()
-	if err != nil {
-		log.Fatalf("%v", err)
+
+	// 链接原数据数据库
+	if err := InitSourceDB(configMap.Source, randSchemaMap.Source.String); err != nil {
+		log.Fatalf("初始化(源)数据库链接出错, %v", err)
+	}
+
+	// 初始化目标连接数
+	if err := InitTargetDB(configMap.Target, randSchemaMap.Target.String); err != nil {
+		log.Fatalf("初始化(目标)数据库链接出错, %v", err)
 	}
 
 	// 如果没有设置binglog开始位点则show master status 找
@@ -34,6 +44,11 @@ func StartMigration(_parser *parser.RunParser) {
 		if err := _parser.SetStartBinlogInfoByHostAndPort(configMap.Source.Host.String, int(configMap.Source.Port.Int64)); err != nil {
 			log.Fatalf("实时获取主库 位点信息出错. %v, 退出迁移", err.Error())
 		}
+	}
+
+	// 保存binglog开始位点
+	if err := new(dao.SourceDao).UpdateStartLogPosInfo(_parser.TaskUUID, _parser.StartLogFile, _parser.StartLogPos); err != nil {
+		log.Fatalf("迁移启动保存位点信息出错 %v", err)
 	}
 
 	// 初始化需要迁移的表
@@ -45,15 +60,14 @@ func StartMigration(_parser *parser.RunParser) {
 	matemap.ShowAllMigrationTableNames()
 	matemap.ShowAllIgnoreMigrationTableNames(configMap)
 
-	wg := new(sync.WaitGroup)
-
 	// 用于每次row copy 完成后告诉checksum需要对哪个范围进行checksum
-	rowCopy2CheksumChan := make(chan *matemap.PrimaryRangeValue)
+	rowCopy2CheksumChan := make(chan *matemap.PrimaryRangeValue, 1000)
 	// 当所有的 row copy 完成通知可以进行二次checksum
 	// 第一次checksum是每一次rowcopy完都进行, 如果发生了数据不一致,
 	// 会在最后所有的rowcopy完成后再次对第一次不一致的进行checksum操作
-	notifySecondChecksum := make(chan bool)
+	notifySecondChecksum := make(chan bool, 1000)
 
+	wg := new(sync.WaitGroup)
 	// 开启了 checksum功能, 需要进行checksum
 	if _parser.EnableChecksum {
 		wg.Add(1)
@@ -111,25 +125,12 @@ Params:
 	_notifySecondChecksum: 通知可以进行二次checksum了
 */
 func StartRowCopy(
-	_parser *parser.RunParser,
-	_configMap *config.ConfigMap,
-	_rowCopy2ChecksumChan chan *matemap.PrimaryRangeValue,
-	_notifySecondChecksum chan bool,
+	parser *parser.RunParser,
+	configMap *config.ConfigMap,
+	rowCopy2ChecksumChan chan *matemap.PrimaryRangeValue,
+	notifySecondChecksum chan bool,
 ) error {
-
-	isComplete, err := mysqlrc.TaskRowCopyIsComplete(_configMap.TaskUUID)
-	if err != nil {
-		log.Errorf("%v: 失败. 获取任务 row copy 是否完成失败. 将不进行row copy行为. %v. %v",
-			common.CurrLine(), _configMap.TaskUUID, err)
-		return nil
-	}
-	if isComplete {
-		log.Warningf("%v: 警告. row copy 任务已经完成. 不需要进行row copy 操作. %v",
-			common.CurrLine(), _configMap.TaskUUID)
-		return nil
-	}
-
-	rowCopy, err := mysqlrc.NewRowCopy(_parser, _configMap, _rowCopy2ChecksumChan, _notifySecondChecksum)
+	rowCopy, err := mysqlrc.NewRowCopy(parser, configMap, rowCopy2ChecksumChan, notifySecondChecksum)
 	if err != nil {
 		return err
 	}
@@ -148,20 +149,62 @@ Params:
 	_notifySecondChecksum: 通知可以进行二次checksum了
 */
 func StartChecksum(
-	_parser *parser.RunParser,
-	_configMap *config.ConfigMap,
-	_wg *sync.WaitGroup,
-	_rowCopy2ChecksumChan chan *matemap.PrimaryRangeValue,
-	_notifySecondChecksum chan bool,
+	parser *parser.RunParser,
+	configMap *config.ConfigMap,
+	wg *sync.WaitGroup,
+	rowCopy2ChecksumChan chan *matemap.PrimaryRangeValue,
+	notifySecondChecksum chan bool,
 ) error {
-	defer _wg.Done()
+	defer wg.Done()
 
-	checksum, err := mysqlcs.NewChecksum(_parser, _configMap, _rowCopy2ChecksumChan, _notifySecondChecksum)
+	checksum, err := mysqlcs.NewChecksum(parser, configMap, rowCopy2ChecksumChan, notifySecondChecksum)
 	if err != nil {
 		return err
 	}
 
 	checksum.Start()
+
+	return nil
+}
+
+func InitSourceDB(source *model.Source, dbName string) error {
+	cfg := setting.NewMysqlConfig(
+		source.Host.String,
+		source.Port.Int64,
+		source.UserName.String,
+		source.Password.String,
+		dbName,
+		100,
+		99,
+	)
+
+	db, err := gdbc.GetMySQLDB(cfg)
+	if err != nil {
+		return err
+	}
+
+	gdbc.AddInstanceToCache(source.Host.String, source.Port.Int64, db)
+
+	return nil
+}
+
+func InitTargetDB(target *model.Target, dbName string) error {
+	cfg := setting.NewMysqlConfig(
+		target.Host.String,
+		target.Port.Int64,
+		target.UserName.String,
+		target.Password.String,
+		dbName,
+		100,
+		99,
+	)
+
+	db, err := gdbc.GetMySQLDB(cfg)
+	if err != nil {
+		return err
+	}
+
+	gdbc.AddInstanceToCache(target.Host.String, target.Port.Int64, db)
 
 	return nil
 }

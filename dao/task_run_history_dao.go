@@ -9,10 +9,10 @@ import (
 type TaskRunHistoryDao struct{}
 
 func (this *TaskRunHistoryDao) GetByID(id int64, columnStr string) (*model.TaskRunHistory, error) {
-	ormInstance := gdbc.GetOrmInstance()
+	ormDB := gdbc.GetOrmInstance()
 
 	taskRunHistory := new(model.TaskRunHistory)
-	err := ormInstance.DB.Select(columnStr).Where("id = ?", id).First(taskRunHistory).Error
+	err := ormDB.Select(columnStr).Where("id = ?", id).First(taskRunHistory).Error
 	if err != nil {
 		if err == gorm.ErrRecordNotFound {
 			return nil, nil
@@ -24,10 +24,10 @@ func (this *TaskRunHistoryDao) GetByID(id int64, columnStr string) (*model.TaskR
 }
 
 func (this *TaskRunHistoryDao) FindByTaskUUID(taskUUID string, columnStr string) ([]model.TaskRunHistory, error) {
-	ormInstance := gdbc.GetOrmInstance()
+	ormDB := gdbc.GetOrmInstance()
 
 	taskRunHistorys := []model.TaskRunHistory{}
-	err := ormInstance.DB.Select(columnStr).Where("task_uuid = ?", taskUUID).Find(&taskRunHistorys).Error
+	err := ormDB.Select(columnStr).Where("task_uuid = ?", taskUUID).Find(&taskRunHistorys).Error
 	if err != nil {
 		if err == gorm.ErrRecordNotFound {
 			return taskRunHistorys, nil

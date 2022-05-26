@@ -78,7 +78,7 @@ func (this *Checksum) Start() {
 
 	wg.Wait()
 
-	log.Infof("%v: checksum任务总体完成", common.CurrLine())
+	log.Infof("%v: !!!!!!!!!!!!! checksum任务总体完成 !!!!!!!!!!!!!", common.CurrLine())
 }
 
 /* 循环进行checksum校验

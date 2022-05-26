@@ -95,10 +95,7 @@ Params:
     _host: 链接数据库 ip
     _port: 链接数据库端口
 */
-func (this *PrimaryRangeValue) GetNextPrimaryRangeValue(
-	_maxRowCnt int,
-	_host string,
-	_port int,
+func (this *PrimaryRangeValue) GetNextPrimaryRangeValue(maxRowCnt int, host string, port int,
 ) (*PrimaryRangeValue, error) {
 	// 获取表名
 	tableName := common.FormatTableName(this.Schema, this.Table, "")
@@ -112,11 +109,9 @@ func (this *PrimaryRangeValue) GetNextPrimaryRangeValue(
 	}
 
 	// 获取操作相关表的实例
-	instance, err := gdbc.GetDynamicInstanceByHostPort(_host, _port)
-	if err != nil {
-		errMSG := fmt.Sprintf("%v: 失败. 获取下一个主键范围值(获取数据库链接). %v. %v",
-			common.CurrLine(), tableName, err)
-		return nil, errors.New(errMSG)
+	instance, ok := gdbc.GetDynamicDBByHostPort(host, int64(port))
+	if !ok {
+		return nil, fmt.Errorf("%v: 缓存中不存在该实例(%v:%v). 获取下一个主键范围值. %v", common.CurrLine(), host, port, tableName)
 	}
 
 	// 获取该表的主键名
@@ -124,19 +119,17 @@ func (this *PrimaryRangeValue) GetNextPrimaryRangeValue(
 	// 表当前row copy到的范围值的最大值
 	maxValueSlice := this.GetMaxValueSlice(sourceTablePKNames)
 
-	selectSql := table.GetSelPerBatchMaxPKSqlTpl(_maxRowCnt)
-	row := instance.DB.QueryRow(selectSql, maxValueSlice...)
+	selectSql := table.GetSelPerBatchMaxPKSqlTpl(maxRowCnt)
+	row := instance.QueryRow(selectSql, maxValueSlice...)
 	nextValue, err := common.Row2Map(row, sourceTablePKNames, table.FindSourcePKColumnTypes())
 	if err != nil {
 		errMSG := fmt.Sprintf("%v: 失败. 获取表row copy 下一个主键值(row 装换map出错). %v. %v. %v",
 			common.CurrLine(), tableName, err, selectSql)
 		return nil, errors.New(errMSG)
 	}
-	log.Infof("%v: 成功. 获取表 row copy 下一个主键值, %v: %v",
-		common.CurrLine(), tableName, nextValue)
+	log.Infof("%v: 成功. 获取表 row copy 下一个主键值, %v: %v", common.CurrLine(), tableName, nextValue)
 
-	nextPrimaryRangeValue := NewPrimaryRangeValue("-1", this.Schema,
-		this.Table, this.MaxValue, nextValue)
+	nextPrimaryRangeValue := NewPrimaryRangeValue("-1", this.Schema, this.Table, this.MaxValue, nextValue)
 
 	return nextPrimaryRangeValue, nil
 }

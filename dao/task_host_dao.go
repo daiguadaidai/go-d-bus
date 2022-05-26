@@ -9,10 +9,10 @@ import (
 type TaskHostDao struct{}
 
 func (this *TaskHostDao) GetByID(id int64, columnStr string) (*model.TaskHost, error) {
-	ormInstance := gdbc.GetOrmInstance()
+	ormDB := gdbc.GetOrmInstance()
 
 	taskHost := new(model.TaskHost)
-	err := ormInstance.DB.Select(columnStr).Where("id = ?", id).First(taskHost).Error
+	err := ormDB.Select(columnStr).Where("id = ?", id).First(taskHost).Error
 	if err != nil {
 		if err == gorm.ErrRecordNotFound {
 			return nil, nil
@@ -24,10 +24,10 @@ func (this *TaskHostDao) GetByID(id int64, columnStr string) (*model.TaskHost, e
 }
 
 func (this *TaskHostDao) GetLeastAvailable(idc string, columnStr string) (*model.TaskHost, error) {
-	ormInstance := gdbc.GetOrmInstance()
+	ormDB := gdbc.GetOrmInstance()
 
 	taskHost := new(model.TaskHost)
-	err := ormInstance.DB.Select(columnStr).Where("idc = ? AND is_available=1", idc).Order("curr_process_cnt ASC").First(taskHost).Error
+	err := ormDB.Select(columnStr).Where("idc = ? AND is_available=1", idc).Order("curr_process_cnt ASC").First(taskHost).Error
 	if err != nil {
 		if err == gorm.ErrRecordNotFound {
 			return nil, nil
@@ -39,10 +39,10 @@ func (this *TaskHostDao) GetLeastAvailable(idc string, columnStr string) (*model
 }
 
 func (this *TaskHostDao) FindByHost(host string, columnStr string) ([]model.TaskHost, error) {
-	ormInstance := gdbc.GetOrmInstance()
+	ormDB := gdbc.GetOrmInstance()
 
 	taskHosts := []model.TaskHost{}
-	err := ormInstance.DB.Select(columnStr).Where("host = ?", host).Find(&taskHosts).Error
+	err := ormDB.Select(columnStr).Where("host = ?", host).Find(&taskHosts).Error
 	if err != nil {
 		if err == gorm.ErrRecordNotFound {
 			return taskHosts, nil
@@ -54,10 +54,10 @@ func (this *TaskHostDao) FindByHost(host string, columnStr string) ([]model.Task
 }
 
 func (this *TaskHostDao) FindByAvailable(isAvailable int64, columnStr string) ([]model.TaskHost, error) {
-	ormInstance := gdbc.GetOrmInstance()
+	ormDB := gdbc.GetOrmInstance()
 
 	taskHosts := []model.TaskHost{}
-	err := ormInstance.DB.Select(columnStr).Where("is_available = ?", isAvailable).Find(&taskHosts).Error
+	err := ormDB.Select(columnStr).Where("is_available = ?", isAvailable).Find(&taskHosts).Error
 	if err != nil {
 		return nil, err
 	}
@@ -66,10 +66,10 @@ func (this *TaskHostDao) FindByAvailable(isAvailable int64, columnStr string) ([
 }
 
 func (this *TaskHostDao) FindByAvailableAndIDC(isAvailable int64, idc string, columnStr string) ([]model.TaskHost, error) {
-	ormInstance := gdbc.GetOrmInstance()
+	ormDB := gdbc.GetOrmInstance()
 
 	taskHosts := []model.TaskHost{}
-	err := ormInstance.DB.Select(columnStr).Where("is_available = ? and idc = ?", isAvailable, idc).Find(&taskHosts).Error
+	err := ormDB.Select(columnStr).Where("is_available = ? and idc = ?", isAvailable, idc).Find(&taskHosts).Error
 	if err != nil {
 		if err == gorm.ErrRecordNotFound {
 			return taskHosts, nil

@@ -8,11 +8,11 @@ import (
 
 type ColumnMapDao struct{}
 
-func (this *ColumnMapDao) FindByTaskUUID(taskUUID string, columnStr string) ([]model.ColumnMap, error) {
-	ormInstance := gdbc.GetOrmInstance()
+func (this *ColumnMapDao) FindByTaskUUID(taskUUID string, columnStr string) ([]*model.ColumnMap, error) {
+	ormDB := gdbc.GetOrmInstance()
 
-	columnMaps := []model.ColumnMap{}
-	err := ormInstance.DB.Select(columnStr).Where("task_uuid = ?", taskUUID).Find(&columnMaps).Error
+	var columnMaps []*model.ColumnMap
+	err := ormDB.Select(columnStr).Where("task_uuid = ?", taskUUID).Find(&columnMaps).Error
 	if err != nil {
 		if err == gorm.ErrRecordNotFound {
 			return columnMaps, nil

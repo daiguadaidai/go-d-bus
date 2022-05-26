@@ -103,8 +103,7 @@ func (this *RunParser) ParseStartBinlogInfo() error {
 		if this.StartLogPos >= 0 { // 命令行有指定开始的 binlog 位点
 			return nil
 		} else { // 命令行没有指定开始的binlog 位点, 进行赋值为 0
-			log.Warningf("指定了开始binlog文件, 但是没有指定开始binlog pos, "+
-				"将开始binlog pos 设置为0. %v -> 0 %v", this.StartLogPos, common.CurrLine())
+			log.Warningf("指定了开始binlog文件, 但是没有指定开始binlog pos, 将开始binlog pos 设置为0. %v -> 0 %v", this.StartLogPos, common.CurrLine())
 			this.StartLogPos = 0
 			return nil
 		}
@@ -115,9 +114,7 @@ func (this *RunParser) ParseStartBinlogInfo() error {
 	columnStr := "log_file, log_pos, start_log_file, start_log_pos"
 	source, err := sourceDao.GetByTaskUUID(this.TaskUUID, columnStr)
 	if err != nil {
-		errMSG := fmt.Sprintf("失败. 获取数据库源实例开始位点信息(获取数据库错误). "+
-			"Task UUID: %v %v %v", this.TaskUUID, err, common.CurrLine())
-		return errors.New(errMSG)
+		return fmt.Errorf("失败. 获取数据库源实例开始位点信息(获取数据库错误). Task UUID: %v %v %v", this.TaskUUID, err, common.CurrLine())
 	}
 
 	// 数据库中有当期应用到的位点
@@ -130,8 +127,7 @@ func (this *RunParser) ParseStartBinlogInfo() error {
 			this.StartLogPos = 0
 			return nil
 		}
-		log.Warningf("位点信息来源于数据库的当前应用位点, %v:%v, %v",
-			this.StartLogFile, this.StartLogPos, common.CurrLine())
+		log.Warningf("位点信息来源于数据库的当前应用位点, %v:%v, %v", this.StartLogFile, this.StartLogPos, common.CurrLine())
 
 		return nil
 	}
@@ -177,8 +173,7 @@ func (this *RunParser) ParseStopBinlogInfo() error {
 	columnStr := "stop_log_file, stop_log_pos"
 	source, err := sourceDao.GetByTaskUUID(this.TaskUUID, columnStr)
 	if err != nil {
-		errMSG := fmt.Sprintf("失败. 获取数据库源实例停止位点信息(获取数据库错误). Task UUID: %v %v %v", this.TaskUUID, err, common.CurrLine())
-		return errors.New(errMSG)
+		return fmt.Errorf("失败. 获取数据库源实例停止位点信息(获取数据库错误). Task UUID: %v %v %v", this.TaskUUID, err, common.CurrLine())
 	}
 
 	// 数据库中有指定停止位点
@@ -460,11 +455,10 @@ Params:
     _host: 实例host
     _port: 实例port
 */
-func (this *RunParser) SetStartBinlogInfoByHostAndPort(_host string, _port int) error {
-	instance, err := gdbc.GetDynamicInstanceByHostPort(_host, _port)
-	if err != nil {
-		errMSG := fmt.Sprintf("失败. 设置binlog开始位点失败(获取实例链接). %v:%v %v %v", _host, _port, err, common.CurrLine())
-		errors.New(errMSG)
+func (this *RunParser) SetStartBinlogInfoByHostAndPort(host string, port int) error {
+	instance, ok := gdbc.GetDynamicDBByHostPort(host, int64(port))
+	if !ok {
+		return fmt.Errorf("%v: 缓存中不存在该实例(%v:%v). 设置binlog开始位点失败", common.CurrLine(), host, port)
 	}
 
 	showSql := "/* go-d-bus */ SHOW MASTER STATUS"
@@ -475,10 +469,9 @@ func (this *RunParser) SetStartBinlogInfoByHostAndPort(_host string, _port int) 
 	var binlogIgnoreDB sql.NullString
 	var executedGtidSet sql.NullString
 
-	err = instance.DB.QueryRow(showSql).Scan(&file, &position, &binlogDoDB, &binlogIgnoreDB, &executedGtidSet)
+	err := instance.QueryRow(showSql).Scan(&file, &position, &binlogDoDB, &binlogIgnoreDB, &executedGtidSet)
 	if err != nil {
-		errMSG := fmt.Sprintf("失败. 获取实例 binlog 位点信息(查询sql) %v:%v %v %v", _host, _port, err, common.CurrLine())
-		errors.New(errMSG)
+		return fmt.Errorf("%v: 失败. 获取实例 binlog 位点信息(查询sql) %v:%v %v", common.CurrLine(), host, port, err)
 	}
 
 	// 设置binlog位点信息
@@ -488,6 +481,5 @@ func (this *RunParser) SetStartBinlogInfoByHostAndPort(_host string, _port int) 
 		return nil
 	}
 
-	errMSG := fmt.Sprintf("失败. 没有获得到binlog位点信息. %v:%v %v", _host, _port, common.CurrLine())
-	return errors.New(errMSG)
+	return fmt.Errorf("失败. 没有获得到binlog位点信息. %v:%v %v", host, port, common.CurrLine())
 }

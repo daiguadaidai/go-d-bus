@@ -6,8 +6,8 @@ import (
 )
 
 // 创建 映射信息的 schema映射信息的 Map, 源 schema 的名字为 map 的 key
-func MakeSchemaMapMap(_schemaMaps []model.SchemaMap) map[string]model.SchemaMap {
-	schemaMapMap := make(map[string]model.SchemaMap)
+func MakeSchemaMapMap(_schemaMaps []*model.SchemaMap) map[string]*model.SchemaMap {
+	schemaMapMap := make(map[string]*model.SchemaMap)
 
 	for _, schemaMap := range _schemaMaps {
 		// key: schema
@@ -19,8 +19,8 @@ func MakeSchemaMapMap(_schemaMaps []model.SchemaMap) map[string]model.SchemaMap 
 }
 
 // 创建 映射信息的 table 映射信息的 Map, Map 的key为源端的: schema.table
-func MakeTableMapMap(_tableMaps []model.TableMap) map[string]model.TableMap {
-	tableMapMap := make(map[string]model.TableMap)
+func MakeTableMapMap(_tableMaps []*model.TableMap) map[string]*model.TableMap {
+	tableMapMap := make(map[string]*model.TableMap)
 
 	for _, tableMap := range _tableMaps {
 		// key: schema.table
@@ -32,8 +32,8 @@ func MakeTableMapMap(_tableMaps []model.TableMap) map[string]model.TableMap {
 }
 
 // 创建 映射信息的 table 映射信息的 Map, Map 的key为源端的: schema.table.column
-func MakeColumnMapMap(_columnMaps []model.ColumnMap) map[string]model.ColumnMap {
-	columnMapMap := make(map[string]model.ColumnMap)
+func MakeColumnMapMap(_columnMaps []*model.ColumnMap) map[string]*model.ColumnMap {
+	columnMapMap := make(map[string]*model.ColumnMap)
 
 	for _, columnMap := range _columnMaps {
 		// key: schema.table

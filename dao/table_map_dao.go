@@ -9,11 +9,11 @@ import (
 
 type TableMapDao struct{}
 
-func (this *TableMapDao) FindByTaskUUID(taskUUID string, columnStr string) ([]model.TableMap, error) {
-	ormInstance := gdbc.GetOrmInstance()
+func (this *TableMapDao) FindByTaskUUID(taskUUID string, columnStr string) ([]*model.TableMap, error) {
+	ormDB := gdbc.GetOrmInstance()
 
-	tableMaps := []model.TableMap{}
-	err := ormInstance.DB.Select(columnStr).Where("task_uuid = ?", taskUUID).Find(&tableMaps).Error
+	var tableMaps []*model.TableMap
+	err := ormDB.Select(columnStr).Where("task_uuid = ?", taskUUID).Find(&tableMaps).Error
 	if err != nil {
 		if err == gorm.ErrRecordNotFound {
 			return tableMaps, nil
@@ -26,25 +26,20 @@ func (this *TableMapDao) FindByTaskUUID(taskUUID string, columnStr string) ([]mo
 
 // 通过 uuid 获取 schema 数量
 func (this *TableMapDao) Count(taskUUID string) int {
-	ormInstance := gdbc.GetOrmInstance()
+	ormDB := gdbc.GetOrmInstance()
 
 	count := 0
-	ormInstance.DB.Model(&model.TableMap{}).Where("task_uuid = ?", taskUUID).Count(&count)
+	ormDB.Model(&model.TableMap{}).Where("task_uuid = ?", taskUUID).Count(&count)
 
 	return count
 }
 
 // 标记表row copy 完成
-func (this *TableMapDao) TagTableRowCopyComplete(_taskUUID string, _schema string, _table string) int {
-	ormInstance := gdbc.GetOrmInstance()
+func (this *TableMapDao) TagTableRowCopyComplete(taskUUID string, schema string, table string) int {
+	ormDB := gdbc.GetOrmInstance()
 
 	updateTableMap := model.TableMap{RowCopyComplete: sql.NullInt64{1, true}}
-	affected := ormInstance.DB.Model(&model.TableMap{}).Where(
-		"`task_uuid`=? AND `schema`=? AND `source`=?",
-		_taskUUID,
-		_schema,
-		_table,
-	).Updates(updateTableMap).RowsAffected
+	affected := ormDB.Model(&model.TableMap{}).Where("`task_uuid`=? AND `schema`=? AND `source`=?", taskUUID, schema, table).Updates(updateTableMap).RowsAffected
 
 	return int(affected)
 }
@@ -56,16 +51,11 @@ Params:
     _table: 表名
     _jsonData: 需要更新的数据
 */
-func (this *TableMapDao) UpdateCurrIDValue(_taskUUID, _schema, _table, _jsonData string) int {
-	ormInstance := gdbc.GetOrmInstance()
+func (this *TableMapDao) UpdateCurrIDValue(taskUUID, schema, table, jsonData string) int {
+	ormDB := gdbc.GetOrmInstance()
 
-	updateTableMap := model.TableMap{CurrIDValue: sql.NullString{_jsonData, true}}
-	affected := ormInstance.DB.Model(&model.TableMap{}).Where(
-		"`task_uuid`=? AND `schema`=? AND `source`=?",
-		_taskUUID,
-		_schema,
-		_table,
-	).Updates(updateTableMap).RowsAffected
+	updateTableMap := model.TableMap{CurrIDValue: sql.NullString{jsonData, true}}
+	affected := ormDB.Model(&model.TableMap{}).Where("`task_uuid`=? AND `schema`=? AND `source`=?", taskUUID, schema, table).Updates(updateTableMap).RowsAffected
 
 	return int(affected)
 }
@@ -77,16 +67,11 @@ Params:
     _table: 表名
     _jsonData: 需要更新的数据
 */
-func (this *TableMapDao) UpdateMaxIDValue(_taskUUID, _schema, _table, _jsonData string) int {
-	ormInstance := gdbc.GetOrmInstance()
+func (this *TableMapDao) UpdateMaxIDValue(taskUUID, schema, table, jsonData string) int {
+	ormDB := gdbc.GetOrmInstance()
 
-	updateTableMap := model.TableMap{MaxIDValue: sql.NullString{_jsonData, true}}
-	affected := ormInstance.DB.Model(&model.TableMap{}).Where(
-		"`task_uuid`=? AND `schema`=? AND `source`=?",
-		_taskUUID,
-		_schema,
-		_table,
-	).Updates(updateTableMap).RowsAffected
+	updateTableMap := model.TableMap{MaxIDValue: sql.NullString{jsonData, true}}
+	affected := ormDB.Model(&model.TableMap{}).Where("`task_uuid`=? AND `schema`=? AND `source`=?", taskUUID, schema, table).Updates(updateTableMap).RowsAffected
 
 	return int(affected)
 }

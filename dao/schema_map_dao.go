@@ -9,11 +9,11 @@ import (
 type SchemaMapDao struct{}
 
 // 通过 uuid 获取 所有的schema
-func (this *SchemaMapDao) FindByTaskUUID(taskUUID string, columnStr string) ([]model.SchemaMap, error) {
-	ormInstance := gdbc.GetOrmInstance()
+func (this *SchemaMapDao) FindByTaskUUID(taskUUID string, columnStr string) ([]*model.SchemaMap, error) {
+	ormDB := gdbc.GetOrmInstance()
 
-	schemaMaps := []model.SchemaMap{}
-	err := ormInstance.DB.Select(columnStr).Where("task_uuid = ?", taskUUID).Find(&schemaMaps).Error
+	var schemaMaps []*model.SchemaMap
+	err := ormDB.Select(columnStr).Where("task_uuid = ?", taskUUID).Find(&schemaMaps).Error
 	if err != nil {
 		if err == gorm.ErrRecordNotFound {
 			return schemaMaps, nil
@@ -26,10 +26,10 @@ func (this *SchemaMapDao) FindByTaskUUID(taskUUID string, columnStr string) ([]m
 
 // 通过 uuid 获取 schema 数量
 func (this *SchemaMapDao) Count(taskUUID string) int {
-	ormInstance := gdbc.GetOrmInstance()
+	ormDB := gdbc.GetOrmInstance()
 
 	count := 0
-	ormInstance.DB.Model(&model.SchemaMap{}).Where("task_uuid = ?", taskUUID).Count(&count)
+	ormDB.Model(&model.SchemaMap{}).Where("task_uuid = ?", taskUUID).Count(&count)
 
 	return count
 }

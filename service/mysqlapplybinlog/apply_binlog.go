@@ -76,7 +76,7 @@ type ApplyBinlog struct {
 	ParseTimestamp uint32
 
 	ParsedLogFile string // 解析到的日志文件
-	ParsedLogPos  uint32 // 解析到的位点
+	ParsedLogPos  int    // 解析到的位点
 	StopLogFile   string // 停止的的日志文件
 	StopLogPos    int    // 停止的的位点
 }
@@ -95,8 +95,7 @@ func NewApplyBinlog(_parser *parser.RunParser, _configMap *config.ConfigMap) (*A
 
 	// 初始化 需要迁移的表名映射信息
 	applyBinlog.MigrationTableNameMap = matemap.FindAllMigrationTableNameMap()
-	log.Infof("%v: 成功. 初始化 apply binlog 所有迁移的表名. 包含了可以不用迁移的",
-		common.CurrLine())
+	log.Infof("%v: 成功. 初始化 apply binlog 所有迁移的表名. 包含了可以不用迁移的", common.CurrLine())
 
 	// 初始化需要应用binlog的表
 	applyBinlog.NeedApplyTableMap = make(map[string]bool)
@@ -104,17 +103,14 @@ func NewApplyBinlog(_parser *parser.RunParser, _configMap *config.ConfigMap) (*A
 		applyBinlog.NeedApplyTableMap[key] = true
 	}
 	// 将heartbeat table 也添加入需要应用binlog的表中
-	if heartbeatTable := common.FormatTableName(applyBinlog.Parser.HeartbeatSchema,
-		applyBinlog.Parser.HeartbeatTable, ""); heartbeatTable == "" {
-		log.Warning("%v: 警告. 没有指定心跳表, 解析binlog显示的进度, "+
-			"会不准确, 但不影响. 解析和应用binlog", common.CurrLine())
+	if heartbeatTable := common.FormatTableName(applyBinlog.Parser.HeartbeatSchema, applyBinlog.Parser.HeartbeatTable, ""); heartbeatTable == "" {
+		log.Warning("%v: 警告. 没有指定心跳表, 解析binlog显示的进度, 会不准确, 但不影响. 解析和应用binlog", common.CurrLine())
 	} else {
 		applyBinlog.NeedApplyTableMap[heartbeatTable] = true
-		log.Infof("%v: 成功. 添加心跳表到需要迁移的表集合中. %v",
-			common.CurrLine(), heartbeatTable)
+		log.Infof("%v: 成功. 添加心跳表到需要迁移的表集合中. %v", common.CurrLine(), heartbeatTable)
 	}
 
-	// 初始化解析binlog 到 分配bi通道nlog的
+	// 初始化解析binlog 到 分配binlog的
 	applyBinlog.Parse2DistributeChan = make(chan *BinlogEventPos, _parser.ApplyBinlogHighWaterMark)
 
 	// 初始化分配binlog到应用binlog的通道
@@ -131,10 +127,7 @@ func NewApplyBinlog(_parser *parser.RunParser, _configMap *config.ConfigMap) (*A
 	applyBinlog.NeedApplyBinlogMap = ordered_map.NewOrderedMap()
 
 	// 初始化添加和减少需要应用binglog标签通道
-	applyBinlog.AddOrDeleteNeedApplyBinlogChan = make(
-		chan *AddOrDeleteNeedApplyBinlog,
-		_parser.ApplyBinlogParaller*_parser.ApplyBinlogHighWaterMark,
-	)
+	applyBinlog.AddOrDeleteNeedApplyBinlogChan = make(chan *AddOrDeleteNeedApplyBinlog, _parser.ApplyBinlogParaller*_parser.ApplyBinlogHighWaterMark)
 
 	// 初始化通知记录目标实例的位点信息 chan
 	applyBinlog.NotifySaveTargetLogFilePos = make(chan bool)
@@ -151,7 +144,7 @@ func NewApplyBinlog(_parser *parser.RunParser, _configMap *config.ConfigMap) (*A
 
 	// 初始化解析到的位点信息
 	applyBinlog.ParsedLogFile = _parser.StartLogFile
-	applyBinlog.ParsedLogPos = uint32(_parser.StartLogPos)
+	applyBinlog.ParsedLogPos = _parser.StartLogPos
 	applyBinlog.StopLogFile = _parser.StopLogFile
 	applyBinlog.StopLogPos = _parser.StopLogPos
 
@@ -203,7 +196,7 @@ func (this *ApplyBinlog) Start() {
 
 	wg.Wait()
 
-	log.Infof("%v: 整个应用binlog完成", common.CurrLine())
+	log.Infof("%v: !!!!!!!!!!!!! 整个应用binlog完成 !!!!!!!!!!!!!", common.CurrLine())
 }
 
 // 开始产生binlog event
@@ -218,7 +211,7 @@ func (this *ApplyBinlog) ProduceEvent(wg *sync.WaitGroup) {
 		this.Parser.StartLogFile,
 		this.Parser.StartLogPos,
 		this.Parser.StartLogFile,
-		uint32(this.Parser.StartLogPos),
+		this.Parser.StartLogPos,
 		this.Parser.StartLogFile,
 		this.Parser.StartLogPos,
 		this.StopLogFile,
@@ -234,8 +227,7 @@ func (this *ApplyBinlog) ProduceEvent(wg *sync.WaitGroup) {
 	// 生成解析binglog 工具
 	streamer, err := this.Syncer.StartSync(position)
 	if err != nil {
-		log.Errorf("%v: 错误. 开始binlog发生错误. %v. 退出迁移.",
-			common.CurrLine(), err)
+		log.Errorf("%v: 错误. 开始binlog发生错误. %v. 退出迁移.", common.CurrLine(), err)
 		syscall.Exit(1)
 	}
 
@@ -250,7 +242,7 @@ func (this *ApplyBinlog) ProduceEvent(wg *sync.WaitGroup) {
 			syscall.Exit(1)
 		}
 		this.ParseTimestamp = ev.Header.Timestamp // 设置当前binlog解析到的事件点
-		this.ParsedLogPos = ev.Header.LogPos      // 设置解析到的位点信息
+		this.ParsedLogPos = int(ev.Header.LogPos) // 设置解析到的位点信息
 
 		// 判断是否有设置 停止位点信息. 和解析位点是否大于停止位点. 是的化则不进行binlog应用
 		for this.IsStopParseBinlogByStopLogFilePos() {
@@ -594,16 +586,13 @@ func (this *ApplyBinlog) ConsumeInsertRows(_binlogRowInfo *BinlogRowInfo) error 
 	afterRow := _binlogRowInfo.GetAfterRow(table.SourceUsefulColumns)
 
 	// 获取数据库并且执行 REPLACE INTO SQL
-	instance, err := gdbc.GetDynamicInstanceByHostPort(
-		this.ConfigMap.Target.Host.String, int(this.ConfigMap.Target.Port.Int64))
-	if err != nil {
-		errMSG := fmt.Sprintf("%v: 获取目标数据库实例出错 %v:%v. %v",
-			common.CurrLine(), this.ConfigMap.Target.Host.String, this.ConfigMap.Target.Port.Int64, err)
-		return errors.New(errMSG)
+	instance, ok := gdbc.GetDynamicDBByHostPort(this.ConfigMap.Target.Host.String, this.ConfigMap.Target.Port.Int64)
+	if !ok {
+		return fmt.Errorf("%v: 缓存中不存在该实例(%v:%v). 获取目标数据库实例出错", common.CurrLine(), this.ConfigMap.Target.Host.String, this.ConfigMap.Target.Port.Int64)
 	}
 
 	// 开启事物执行sql
-	_, err = instance.DB.Exec(table.GetRepPerBatchSqlTpl(1), afterRow...)
+	_, err = instance.Exec(table.GetRepPerBatchSqlTpl(1), afterRow...)
 	if err != nil {
 		return err
 	}
@@ -667,17 +656,13 @@ func (this *ApplyBinlog) ConsumeDeleteRows(_binlogRowInfo *BinlogRowInfo) error 
 	beforeRow := _binlogRowInfo.GetBeforeRow(table.TargetPKColumns)
 
 	// 获取数据库并且执行 REPLACE INTO SQL
-	instance, err := gdbc.GetDynamicInstanceByHostPort(
-		this.ConfigMap.Target.Host.String, int(this.ConfigMap.Target.Port.Int64))
-	if err != nil {
-		errMSG := fmt.Sprintf("%v: 获取目标数据库实例出错 %v:%v. %v",
-			common.CurrLine(), this.ConfigMap.Target.Host.String,
-			this.ConfigMap.Target.Port.Int64, err)
-		return errors.New(errMSG)
+	instance, ok := gdbc.GetDynamicDBByHostPort(this.ConfigMap.Target.Host.String, this.ConfigMap.Target.Port.Int64)
+	if !ok {
+		return fmt.Errorf("%v: 缓存中不存在该实例(%v:%v). 获取目标数据库实例出错", common.CurrLine(), this.ConfigMap.Target.Host.String, this.ConfigMap.Target.Port.Int64)
 	}
 
 	// 开启事物执行sql
-	_, err = instance.DB.Exec(table.GetDelSqlTpl(), beforeRow...)
+	_, err = instance.Exec(table.GetDelSqlTpl(), beforeRow...)
 	if err != nil {
 		return err
 	}

@@ -4,9 +4,7 @@ import (
 	"fmt"
 	"github.com/daiguadaidai/go-d-bus/common"
 	"github.com/daiguadaidai/go-d-bus/dao"
-	"github.com/daiguadaidai/go-d-bus/gdbc"
 	"github.com/daiguadaidai/go-d-bus/model"
-	"github.com/daiguadaidai/go-d-bus/setting"
 	"github.com/juju/errors"
 )
 
@@ -16,10 +14,10 @@ type ConfigMap struct {
 	Source *model.Source // 源数据库
 	Target *model.Target // 目标数据库
 
-	SchemaMapMap    map[string]model.SchemaMap    // 数据库映射信息, key为源数据库名称
-	TableMapMap     map[string]model.TableMap     // 数据库表映射信息, key 为 源数据库的 schema.table
-	ColumnMapMap    map[string]model.ColumnMap    // 数据库字段映射信息, key 为 源数据库的 schema.table.column
-	IgnoreColumnMap map[string]model.IgnoreColumn // 不需要同步的列
+	SchemaMapMap    map[string]*model.SchemaMap    // 数据库映射信息, key为源数据库名称
+	TableMapMap     map[string]*model.TableMap     // 数据库表映射信息, key 为 源数据库的 schema.table
+	ColumnMapMap    map[string]*model.ColumnMap    // 数据库字段映射信息, key 为 源数据库的 schema.table.column
+	IgnoreColumnMap map[string]*model.IgnoreColumn // 不需要同步的列
 
 	RunQuota *model.Task // 获取运行任务的参数
 }
@@ -170,55 +168,7 @@ func (this *ConfigMap) InitColumnMapMap() error {
 
 // 设置 不需要同步的列
 func (this *ConfigMap) InitIgnoreColumnMap() error {
-	this.IgnoreColumnMap = make(map[string]model.IgnoreColumn)
-
-	return nil
-}
-
-// 设置源实例配置信息, 到动态实例信息中.
-func (this *ConfigMap) SetSourceDBConfig() error {
-	dbConfig := &setting.DBConfig{
-		Username: this.Source.UserName.String,
-		Password: this.Source.Password.String,
-		Host:     this.Source.Host.String,
-		Port:     int(this.Source.Port.Int64),
-		// Database:          "",
-		CharSet:           "utf8mb4",
-		MaxOpenConns:      500,
-		MaxIdelConns:      250,
-		TimeOut:           60,
-		AllowOldPasswords: 1,
-		AutoCommit:        true,
-	}
-
-	err := gdbc.SetDynamicConfig(dbConfig)
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-// 设置源实例配置信息, 到动态实例信息中.
-func (this *ConfigMap) SetTargetDBConfig() error {
-	dbConfig := &setting.DBConfig{
-		Username: this.Target.UserName.String,
-		Password: this.Target.Password.String,
-		Host:     this.Target.Host.String,
-		Port:     int(this.Target.Port.Int64),
-		// Database:          "",
-		CharSet:           "utf8mb4",
-		MaxOpenConns:      500,
-		MaxIdelConns:      250,
-		TimeOut:           60,
-		AllowOldPasswords: 1,
-		AutoCommit:        true,
-	}
-
-	err := gdbc.SetDynamicConfig(dbConfig)
-	if err != nil {
-		return err
-	}
+	this.IgnoreColumnMap = make(map[string]*model.IgnoreColumn)
 
 	return nil
 }
@@ -228,14 +178,13 @@ Params:
     _schemaName: 哪个数据库
     _tableName: 哪个表
 */
-func (this *ConfigMap) GetIgnoreColumnsBySchemaAndTable(_schemaName string,
-	_tableName string) []string {
+func (this *ConfigMap) GetIgnoreColumnsBySchemaAndTable(schemaName string, tableName string) []string {
 
 	ignoreColumnNames := make([]string, 0, 10)
 
 	// 便利所有不需要迁移的列, 并塞选出指定表的列名称
 	for _, ignoreColumn := range this.IgnoreColumnMap {
-		if ignoreColumn.Schema.String == _schemaName && ignoreColumn.Table.String == _tableName {
+		if ignoreColumn.Schema.String == schemaName && ignoreColumn.Table.String == tableName {
 			ignoreColumnNames = append(ignoreColumnNames, ignoreColumn.Name.String)
 		}
 	}
@@ -323,4 +272,12 @@ func NewConfigMap(_taskUUID string) (*ConfigMap, error) {
 	}
 
 	return configMap, nil
+}
+
+func (this *ConfigMap) GetRandSchemaMap() *model.SchemaMap {
+	for _, schemMap := range this.SchemaMapMap {
+		return schemMap
+	}
+
+	return nil
 }

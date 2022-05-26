@@ -1,8 +1,7 @@
 package gdbc
 
 import (
-	"sync"
-
+	"fmt"
 	"github.com/daiguadaidai/go-d-bus/common"
 	"github.com/daiguadaidai/go-d-bus/setting"
 	_ "github.com/go-sql-driver/mysql"
@@ -10,38 +9,28 @@ import (
 	"github.com/outbrain/golib/log"
 )
 
-var ormInstance *OrmInstance
+var ormDB *gorm.DB
 
-type OrmInstance struct {
-	DB *gorm.DB
-	sync.Once
-}
-
-// 单例模式获取原生数据库链接
-func GetOrmInstance() *OrmInstance {
-	if ormInstance.DB == nil {
-		// 实例化元数据库实例
-		ormInstance.Once.Do(func() {
-			// 获取元数据配置信息
-			dbConfig := setting.DBConfigs[setting.MetaDBKey]
-
-			// 链接数据库
-			var err error
-			ormInstance.DB, err = gorm.Open("mysql", dbConfig.GetDataSource())
-			if err != nil {
-				log.Errorf("%v: 打开ORM数据库实例错误, %v", common.CurrLine(), err)
-			}
-
-			ormInstance.DB.DB().SetMaxOpenConns(dbConfig.MaxOpenConns)
-			ormInstance.DB.DB().SetMaxIdleConns(dbConfig.MaxIdelConns)
-			ormInstance.DB.DB().Ping()
-		})
+func SetOrmDB(mysqlConfig *setting.MysqlConfig) error {
+	dataSource, err, _ := mysqlConfig.GetDataSource()
+	if err != nil {
+		return fmt.Errorf("orm 获取数据源(d_bus)出错: %s", err.Error())
+	}
+	ormDB, err = gorm.Open("mysql", dataSource)
+	if err != nil {
+		log.Errorf("%v: 打开ORM数据库实例错误, %v", common.CurrLine(), err)
 	}
 
-	return ormInstance
+	ormDB.DB().SetMaxOpenConns(mysqlConfig.MysqlMaxOpenConns)
+	ormDB.DB().SetMaxIdleConns(mysqlConfig.MysqlMaxIdleConns)
+
+	if err := ormDB.DB().Ping(); err != nil {
+		log.Errorf("%v: ping 数据库(d_bus)出错 orm , %v", common.CurrLine(), err)
+	}
+
+	return nil
 }
 
-func init() {
-	// 初始化OrmInstance 实例
-	ormInstance = new(OrmInstance)
+func GetOrmInstance() *gorm.DB {
+	return ormDB
 }

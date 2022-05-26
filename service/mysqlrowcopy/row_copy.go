@@ -180,6 +180,25 @@ func NewRowCopy(
 
 // 开始进行row copy
 func (this *RowCopy) Start() {
+	defer func() {
+		close(this.ToChecksumChan)
+		log.Infof("%v: row copy 完成, 关闭 checksum 接受通道", common.CurrLine())
+		this.NotifySecondChecksum <- true // 通知checksum可以进行二次校验了
+		log.Infof("%v: row copy 完成, 通知可以进行二次校验了", common.CurrLine())
+
+		log.Infof("%v, !!!!!!!!!!!!! 整个row copy完成. !!!!!!!!!!!!", common.CurrLine())
+	}()
+
+	isComplete, err := TaskRowCopyIsComplete(this.ConfigMap.TaskUUID)
+	if err != nil {
+		log.Errorf("%v: 失败. 获取任务 row copy 是否完成失败. 将不进行row copy行为. %v. %v", common.CurrLine(), this.ConfigMap.TaskUUID, err)
+		return
+	}
+	if isComplete {
+		log.Warningf("%v: 警告. row copy 任务已经完成. 不需要进行row copy 操作. %v", common.CurrLine(), this.ConfigMap.TaskUUID)
+		return
+	}
+
 	wg := new(sync.WaitGroup)
 
 	// 循环生成 row copy 需要的主键值, 并将值放入通道中PrimaryRangeValueChan
@@ -203,8 +222,6 @@ func (this *RowCopy) Start() {
 	go this.LoopSaveRowCopyProgress(wg)
 
 	wg.Wait()
-
-	log.Infof("%v, 整个row copy完成.", common.CurrLine())
 }
 
 // 循环生成主键值
@@ -326,12 +343,6 @@ func (this *RowCopy) LoopConsumePrimaryRangeValue(wg *sync.WaitGroup, _parallerT
 		this.RowCopyComsumerCount.Dec()
 		if this.RowCopyComsumerCount.Load() == 0 { // 如果都消费完了,可以关闭掉row copy 主键处理的缓存
 			close(this.AddOrDelWatingTagCompleteChan)
-			if this.Parser.EnableChecksum {
-				close(this.ToChecksumChan)
-				log.Infof("%v: row copy 完成, 关闭 checksum 接受通道", common.CurrLine())
-				this.NotifySecondChecksum <- true // 通知checksum可以进行二次校验了
-				log.Infof("%v: row copy 完成, 通知可以进行二次校验了", common.CurrLine())
-			}
 		}
 	}()
 
@@ -383,50 +394,42 @@ Params:
 3. 将数据 insert 到目标表中
 4. 通知, 该主键范围消费完成
 */
-func (this *RowCopy) ConsumePrimaryRangeValue(
-	_parallerTag int,
-	_primaryRangeValue *matemap.PrimaryRangeValue,
+func (this *RowCopy) ConsumePrimaryRangeValue(parallerTag int, primaryRangeValue *matemap.PrimaryRangeValue,
 ) error {
 	defer func() {
 		if err := recover(); err != nil {
 			log.Errorf("%v: 错误. row copy 消费主键值发生错误. 表: %v.%v, 最小值: %v, 最大值: %v. %v. 退出 go-d-bus 程序, %v",
-				common.CurrLine(), _primaryRangeValue.Schema, _primaryRangeValue.Table, _primaryRangeValue.MinValue, _primaryRangeValue.MaxValue, err,
-				string(debug.Stack()))
+				common.CurrLine(), primaryRangeValue.Schema, primaryRangeValue.Table, primaryRangeValue.MinValue, primaryRangeValue.MaxValue, err, string(debug.Stack()))
 
 			syscall.Exit(1)
 		}
 	}()
 
 	// 获取源表数据
-	data, rowCount, err := SelectRowCopyData(this.ConfigMap.Source.Host.String,
-		int(this.ConfigMap.Source.Port.Int64), _primaryRangeValue)
+	data, rowCount, err := SelectRowCopyData(this.ConfigMap.Source.Host.String, int(this.ConfigMap.Source.Port.Int64), primaryRangeValue)
 	if err != nil {
-		errMSG := fmt.Sprintf("%v: 失败. row copy 获取源表数据错误. 表: %v.%v 最小值: %v, 最大值: %v. %v:%v, %v",
-			common.CurrLine(), _primaryRangeValue.Schema, _primaryRangeValue.Table, _primaryRangeValue.MinValue, _primaryRangeValue.MaxValue,
-			this.ConfigMap.Source.Host.String, int(this.ConfigMap.Source.Port.Int64), err)
-		return errors.New(errMSG)
+		return fmt.Errorf("%v: 失败. row copy 获取源表数据错误. 表: %v.%v 最小值: %v, 最大值: %v. %v:%v, %v",
+			common.CurrLine(), primaryRangeValue.Schema, primaryRangeValue.Table, primaryRangeValue.MinValue, primaryRangeValue.MaxValue, this.ConfigMap.Source.Host.String, int(this.ConfigMap.Source.Port.Int64), err)
 	}
 	if rowCount < 1 { // 没有数据
 		log.Warningf("%v: 警告. row copy 没有获取到表数据. 默认此次row copy 完成. 表: %v.%v. 最小值: %v, 最大值: %v",
-			common.CurrLine(), _primaryRangeValue.Schema, _primaryRangeValue.Table, _primaryRangeValue.MinValue, _primaryRangeValue.MaxValue)
+			common.CurrLine(), primaryRangeValue.Schema, primaryRangeValue.Table, primaryRangeValue.MinValue, primaryRangeValue.MaxValue)
 
 		return nil
 	}
 
 	// 向目标表插入数据
-	err = InsertRowCopyData(this.ConfigMap.Target.Host.String, int(this.ConfigMap.Target.Port.Int64), _primaryRangeValue.Schema, _primaryRangeValue.Table, rowCount, data)
+	err = InsertRowCopyData(this.ConfigMap.Target.Host.String, int(this.ConfigMap.Target.Port.Int64), primaryRangeValue.Schema, primaryRangeValue.Table, rowCount, data)
 	if err != nil {
-		errMSG := fmt.Sprintf("%v: 失败. row copy 向目标数据库插入数据 表: %v.%v, 最小值: %v, 最大值: %v. %v:%v. %v",
-			common.CurrLine(), _primaryRangeValue.Schema, _primaryRangeValue.Table, _primaryRangeValue.MinValue, _primaryRangeValue.MaxValue,
-			this.ConfigMap.Source.Host.String, int(this.ConfigMap.Source.Port.Int64), err)
-		return errors.New(errMSG)
+		return fmt.Errorf("%v: 失败. row copy 向目标数据库插入数据 表: %v.%v, 最小值: %v, 最大值: %v. %v:%v. %v",
+			common.CurrLine(), primaryRangeValue.Schema, primaryRangeValue.Table, primaryRangeValue.MinValue, primaryRangeValue.MaxValue, this.ConfigMap.Source.Host.String, int(this.ConfigMap.Source.Port.Int64), err)
 	}
 
 	log.Infof("%v: 完成. 协程%v, 范围 row copy 已经完成. 表: %v.%v. 最小值: %v, 最大值 %v",
-		common.CurrLine(), _parallerTag, _primaryRangeValue.Schema, _primaryRangeValue.Table, _primaryRangeValue.MinValue, _primaryRangeValue.MaxValue)
+		common.CurrLine(), parallerTag, primaryRangeValue.Schema, primaryRangeValue.Table, primaryRangeValue.MinValue, primaryRangeValue.MaxValue)
 
 	// 通知删除缓存中的值
-	addOrDelete := NewAddOrDelete(_primaryRangeValue.Schema, _primaryRangeValue.Table, _primaryRangeValue.TimestampHash, AOD_TYPE_DELETE, _primaryRangeValue)
+	addOrDelete := NewAddOrDelete(primaryRangeValue.Schema, primaryRangeValue.Table, primaryRangeValue.TimestampHash, AOD_TYPE_DELETE, primaryRangeValue)
 	this.AddOrDelWatingTagCompleteChan <- addOrDelete
 
 	return nil

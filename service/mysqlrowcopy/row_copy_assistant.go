@@ -1,11 +1,13 @@
 package mysqlrowcopy
 
 import (
+	"database/sql"
 	"fmt"
 	"github.com/daiguadaidai/go-d-bus/common"
 	"github.com/daiguadaidai/go-d-bus/dao"
 	"github.com/daiguadaidai/go-d-bus/gdbc"
 	"github.com/daiguadaidai/go-d-bus/matemap"
+	_ "github.com/go-sql-driver/mysql"
 	"github.com/juju/errors"
 	"github.com/outbrain/golib/log"
 	"strings"
@@ -223,32 +225,23 @@ Params:
     _schema: 数据库
     _table: 表
 */
-func GetTableFirstPrimaryMap(_host string, _port int, _schema string,
-	_table string) (map[string]interface{}, error) {
+func GetTableFirstPrimaryMap(host string, port int, schema string, table string) (map[string]interface{}, error) {
 
-	migrationTable, err := matemap.GetMigrationTableBySchemaTable(_schema, _table)
+	migrationTable, err := matemap.GetMigrationTableBySchemaTable(schema, table)
 	if err != nil {
-		errMSG := fmt.Sprintf("%v: 失败. 获取迁移的表信息. %v.%v", _schema, _table)
-		return nil, errors.New(errMSG)
+		return nil, fmt.Errorf("%v: 失败. 获取迁移的表信息. %v.%v", common.CurrLine(), schema, table)
 	}
 
-	instance, err := gdbc.GetDynamicInstanceByHostPort(_host, _port)
-	if err != nil {
-		errMSG := fmt.Sprintf("%v: 失败. 查询表 %v.%v 第一条数据(获取实例). %v",
-			common.CurrLine(), _schema, _table, err)
-		return nil, errors.New(errMSG)
+	instance, ok := gdbc.GetDynamicDBByHostPort(host, int64(port))
+	if !ok {
+		return nil, fmt.Errorf("%v: 缓存中不存在该实例(%v:%v). 查询表 %v.%v 第一条数据(获取实例)", common.CurrLine(), host, port, schema, table)
 	}
 
 	selectSql := migrationTable.GetSelFirstPKSqlTpl() // 获取查询表第一条数据的记录 SQL
-	log.Debug(fmt.Sprintf("%v: %v, %v, %v",
-		common.CurrLine(),
-		migrationTable.SourceName,
-		migrationTable.FindSourcePKColumnNames(),
-		migrationTable.FindSourcePKColumnTypes()))
+	log.Debugf("%v: %v, %v, %v", common.CurrLine(), migrationTable.SourceName, migrationTable.FindSourcePKColumnNames(), migrationTable.FindSourcePKColumnTypes())
 
-	row := instance.DB.QueryRow(selectSql)
-	firstPrimaryMap, err := common.Row2Map(row, migrationTable.FindSourcePKColumnNames(),
-		migrationTable.FindSourcePKColumnTypes())
+	row := instance.QueryRow(selectSql)
+	firstPrimaryMap, err := common.Row2Map(row, migrationTable.FindSourcePKColumnNames(), migrationTable.FindSourcePKColumnTypes())
 
 	return firstPrimaryMap, nil
 }
@@ -260,27 +253,23 @@ Params:
     _schema: 数据库
     _table: 表
 */
-func GetTableLastPrimaryMap(_host string, _port int, _schema string,
-	_table string) (map[string]interface{}, error) {
+func GetTableLastPrimaryMap(host string, port int, schema string, table string) (map[string]interface{}, error) {
 
-	migrationTable, err := matemap.GetMigrationTableBySchemaTable(_schema, _table)
+	migrationTable, err := matemap.GetMigrationTableBySchemaTable(schema, table)
 	if err != nil {
-		errMSG := fmt.Sprintf("%v: 失败. 获取迁移的表信息. %v.%v", _schema, _table)
+		errMSG := fmt.Sprintf("%v: 失败. 获取迁移的表信息. %v.%v", schema, table)
 		return nil, errors.New(errMSG)
 	}
 
-	instance, err := gdbc.GetDynamicInstanceByHostPort(_host, _port)
-	if err != nil {
-		errMSG := fmt.Sprintf("%v: 失败. 查询表 %v.%v 最后一条数据(获取实例). %v",
-			common.CurrLine(), _schema, _table, err)
-		return nil, errors.New(errMSG)
+	instance, ok := gdbc.GetDynamicDBByHostPort(host, int64(port))
+	if !ok {
+		return nil, fmt.Errorf("%v: 缓存中不存在该实例(%v:%v). 查询表 %v.%v 最后一条数据(获取实例)", common.CurrLine(), host, port, schema, table)
 	}
 
 	selectSql := migrationTable.GetSelLastPKSqlTpl() // 获取查询表最后一条数据的记录 SQL
 
-	row := instance.DB.QueryRow(selectSql)
-	lastPrimaryMap, err := common.Row2Map(row, migrationTable.FindSourcePKColumnNames(),
-		migrationTable.FindSourcePKColumnTypes())
+	row := instance.QueryRow(selectSql)
+	lastPrimaryMap, err := common.Row2Map(row, migrationTable.FindSourcePKColumnNames(), migrationTable.FindSourcePKColumnTypes())
 
 	return lastPrimaryMap, nil
 }
@@ -310,18 +299,11 @@ func (this *RowCopy) FindCurrGreaterMaxPrimaryTables() map[string]bool {
 	greaterTables := make(map[string]bool)
 
 	for tableName, _ := range this.NeedRowCopyTableMap {
-		log.Warningf("%v: %v - %v", common.CurrLine(),
-			this.CurrentPrimaryRangeValueMap[tableName].MaxValue,
-			this.MaxPrimaryRangeValueMap[tableName].MaxValue)
+		log.Warningf("%v: %v - %v", common.CurrLine(), this.CurrentPrimaryRangeValueMap[tableName].MaxValue, this.MaxPrimaryRangeValueMap[tableName].MaxValue)
 
-		if common.MapAGreaterOrEqualMapB(
-			this.CurrentPrimaryRangeValueMap[tableName].MaxValue,
-			this.MaxPrimaryRangeValueMap[tableName].MaxValue,
-		) {
+		if common.MapAGreaterOrEqualMapB(this.CurrentPrimaryRangeValueMap[tableName].MaxValue, this.MaxPrimaryRangeValueMap[tableName].MaxValue) {
 			log.Warningf("%v: 警告. 表: %v 当前row copy 值 大于等于 截止row copy值. %v >= %v",
-				common.CurrLine(), tableName,
-				this.CurrentPrimaryRangeValueMap[tableName].MaxValue,
-				this.MaxPrimaryRangeValueMap[tableName].MaxValue)
+				common.CurrLine(), tableName, this.CurrentPrimaryRangeValueMap[tableName].MaxValue, this.MaxPrimaryRangeValueMap[tableName].MaxValue)
 
 			greaterTables[tableName] = true
 		}
@@ -371,7 +353,7 @@ func TagTableRowCopyComplete(_taskUUID, _schema, _table string) int {
 /* 标记任务ID完成
 Params:
     _taskUUID: 任务ID
- */
+*/
 func TagTaskRowCopyComplete(_taskUUID string) int {
 	taskDao := new(dao.TaskDao)
 	affected := taskDao.TagTaskRowCopyComplete(_taskUUID)
@@ -383,42 +365,35 @@ Params:
     _host: 实例 host
     _port: 实例 port
     _primaryRangeValue:
- */
-func SelectRowCopyData(
-	_host string,
-	_port int,
-	_primaryRangeValue *matemap.PrimaryRangeValue,
-) ([]interface{}, int, error) {
+*/
+func SelectRowCopyData(host string, port int, primaryRangeValue *matemap.PrimaryRangeValue) ([]interface{}, int, error) {
 	// 获取需要迁移的表的元数据信息
-	table, err := matemap.GetMigrationTableBySchemaTable(_primaryRangeValue.Schema,
-		_primaryRangeValue.Table)
+	table, err := matemap.GetMigrationTableBySchemaTable(primaryRangeValue.Schema, primaryRangeValue.Table)
 	if err != nil {
-        return nil, 0, err
+		return nil, 0, err
 	}
 
 	// 获取 row copy, select sql 语句
 	selectSql := table.GetSelPerBatchSqlTpl()
 	// 获取 select where 占位符的值
-	whereValue := _primaryRangeValue.GetMinMaxValueSlice(table.FindSourcePKColumnNames())
+	whereValue := primaryRangeValue.GetMinMaxValueSlice(table.FindSourcePKColumnNames())
 
 	// 获取实例
-	instance, err := gdbc.GetDynamicInstanceByHostPort(_host, _port)
-	if err != nil {
-		return nil, 0, err
+	instance, ok := gdbc.GetDynamicDBByHostPort(host, int64(port))
+	if !ok {
+		return nil, 0, fmt.Errorf("%v: 缓存中不存在该实例(%v:%v). 获取 row copy select的数据", common.CurrLine(), host, port)
 	}
 
 	// 获取 所有行
-	rows, err := instance.DB.Query(selectSql, whereValue...)
+	rows, err := instance.Query(selectSql, whereValue...)
 	defer rows.Close()
 	if err != nil {
-		errMSG := fmt.Sprintf("%v: row copy 批量获取源表数据出错. %v. %v",
-			common.CurrLine(), selectSql, err)
-		return nil, 0, errors.New(errMSG)
+		return nil, 0, fmt.Errorf("%v: row copy 批量获取源表数据出错. %v. %v", common.CurrLine(), selectSql, err)
 	}
 
 	columns, _ := rows.Columns()
 	scanArgs := make([]interface{}, len(columns)) // 扫描使用
-	values := make([]interface{}, len(columns)) // 映射使用
+	values := make([]interface{}, len(columns))   // 映射使用
 	for i := range values {
 		scanArgs[i] = &values[i]
 	}
@@ -427,12 +402,86 @@ func SelectRowCopyData(
 	rowCount := 0
 	for rows.Next() {
 		//将行数据保存到record字典
-		err = rows.Scan(scanArgs...)
-		for _, col := range values {
-			data = append(data, col)
+		if err = rows.Scan(scanArgs...); err != nil {
+			return nil, 0, fmt.Errorf("%v: scan出错, row copy 批量获取源表数据出错. %v", common.CurrLine(), err)
 		}
 
-		rowCount ++
+		for _, value := range values {
+			data = append(data, value)
+		}
+
+		rowCount++
+	}
+
+	return data, rowCount, nil
+}
+
+/* 获取 row copy select的数据
+Params:
+    _host: 实例 host
+    _port: 实例 port
+    _primaryRangeValue:
+*/
+func SelectRowCopyData2(host string, port int, primaryRangeValue *matemap.PrimaryRangeValue) ([]interface{}, int, error) {
+	// 获取需要迁移的表的元数据信息
+	table, err := matemap.GetMigrationTableBySchemaTable(primaryRangeValue.Schema, primaryRangeValue.Table)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	// 获取 row copy, select sql 语句
+	selectSql := table.GetSelPerBatchSqlTpl()
+	// 获取 select where 占位符的值
+	whereValue := primaryRangeValue.GetMinMaxValueSlice(table.FindSourcePKColumnNames())
+
+	// 获取实例
+	instance, ok := gdbc.GetDynamicDBByHostPort(host, int64(port))
+	if !ok {
+		return nil, 0, fmt.Errorf("%v: 缓存中不存在该实例(%v:%v). 获取 row copy select的数据", common.CurrLine(), host, port)
+	}
+
+	// 获取 所有行
+	rows, err := instance.Query(selectSql, whereValue...)
+	defer rows.Close()
+	if err != nil {
+		return nil, 0, fmt.Errorf("%v: row copy 批量获取源表数据出错. %v. %v", common.CurrLine(), selectSql, err)
+	}
+
+	colTypes, err := rows.ColumnTypes()
+	if err != nil {
+		return nil, 0, fmt.Errorf("获取查询结果字段类型出错. %s", err.Error())
+	}
+
+	columns, _ := rows.Columns()
+	scanArgs := make([]interface{}, len(columns)) // 扫描使用
+	values := make([]sql.RawBytes, len(columns))  // 映射使用
+	for i := range values {
+		scanArgs[i] = &values[i]
+	}
+
+	data := make([]interface{}, 0, len(columns)) // 最终所有的数据
+	rowCount := 0
+	for rows.Next() {
+		//将行数据保存到record字典
+		if err = rows.Scan(scanArgs...); err != nil {
+			return nil, 0, fmt.Errorf("%v: scan出错, row copy 批量获取源表数据出错. %v", common.CurrLine(), err)
+		}
+
+		for i, value := range values {
+			if value == nil {
+				data = append(data, nil)
+				continue
+			}
+
+			// 将 rowbyte转化称想要的类型
+			cvtValue, err := common.ConvertAssign(value, colTypes[i])
+			if err != nil {
+				return nil, 0, fmt.Errorf("将 rowbytes 结果转化为需要的类型的值出错. value: %v. type: %s. %s", value, colTypes[i], err.Error())
+			}
+			data = append(data, cvtValue)
+		}
+
+		rowCount++
 	}
 
 	return data, rowCount, nil
@@ -446,41 +495,26 @@ Params:
     _table: 表
     _rowCount: row copy 行数
     _data: insert 数据
- */
-func InsertRowCopyData(
-	_host string,
-	_port int,
-	_schema string,
-	_table string,
-	_rowCount int,
-	_data []interface{},
-) error {
+*/
+func InsertRowCopyData(host string, port int, schema string, tableName string, rowCount int, data []interface{}) error {
 	// 获取需要迁移表的元数据信息
-	table, err := matemap.GetMigrationTableBySchemaTable(_schema, _table)
+	table, err := matemap.GetMigrationTableBySchemaTable(schema, tableName)
 	if err != nil {
 		return err
 	}
 
 	// 获取执行sql
-	insertSql := table.GetInsIgrBatchSqlTpl(_rowCount)
+	insertSql := table.GetInsIgrBatchSqlTpl(rowCount)
 
 	// 获取实例
-	instance, err := gdbc.GetDynamicInstanceByHostPort(_host, _port)
-	if err != nil {
-		return err
+	instance, ok := gdbc.GetDynamicDBByHostPort(host, int64(port))
+	if !ok {
+		return fmt.Errorf("%v: 缓存中不存在该实例(%v:%v). RowCopy 插入数据", common.CurrLine(), host, port)
 	}
 
 	// 开启事物执行sql
-	tx, err := instance.DB.Begin()
-	if err != nil {
+	if _, err = instance.Exec(insertSql, data...); err != nil {
 		return err
-	}
-	_, err = tx.Exec(insertSql, _data...)
-	if err != nil {
-		tx.Rollback()
-		return err
-	} else {
-		tx.Commit()
 	}
 
 	return nil
@@ -489,7 +523,7 @@ func InsertRowCopyData(
 /* row copy 任务是否已经完成
 Params:
 	_taskUUID: 任务ID
- */
+*/
 func TaskRowCopyIsComplete(_taskUUID string) (bool, error) {
 	taskDao := new(dao.TaskDao)
 	isComplete, err := taskDao.TaskRowCopyIsComplete(_taskUUID)

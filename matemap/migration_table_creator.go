@@ -208,7 +208,7 @@ Params:
     _host: 实例 host
     _port: 实例 port
 */
-func GetSourceTableColumns(_schemaName string, _tableName string, _host string, _port int) ([]Column, error) {
+func GetSourceTableColumns(schemaName string, tableName string, host string, port int) ([]Column, error) {
 	columns := make([]Column, 0, 10)
 
 	// 从数据库中获取表的所有列
@@ -225,22 +225,18 @@ func GetSourceTableColumns(_schemaName string, _tableName string, _host string, 
             AND TABLE_NAME = ?
         ORDER BY ORDINAL_POSITION ASC    
     `
-	log.Infof("%v: 获取表 %v.%v 所有的字段", common.CurrLine(), _schemaName, _tableName)
+	log.Infof("%v: 获取表 %v.%v 所有的字段", common.CurrLine(), schemaName, tableName)
 
 	// 获取数据库实例链接
-	instance, err := gdbc.GetDynamicInstanceByHostPort(_host, _port)
-	if err != nil {
-		errMSG := fmt.Sprintf("%v: 失败. 获取表的所有列. %v.%v %v:%v. %v",
-			common.CurrLine(), _schemaName, _tableName, _host, _port, err)
-		return nil, errors.New(errMSG)
+	instance, ok := gdbc.GetDynamicDBByHostPort(host, int64(port))
+	if !ok {
+		return nil, fmt.Errorf("%v: 缓存中不存在该实例(%v:%v). 获取表的所有列. %v.%v ", common.CurrLine(), host, port, schemaName, tableName)
 	}
 
 	// 查询数据库
-	rows, err := instance.DB.Query(selectSql, _schemaName, _tableName)
+	rows, err := instance.Query(selectSql, schemaName, tableName)
 	if err != nil {
-		errMSG := fmt.Sprintf("%v: 失败. 获取表所有字段. %v.%v %v:%v. %v: %v",
-			common.CurrLine(), _schemaName, _tableName, _host, _port, err, selectSql)
-		return nil, errors.New(errMSG)
+		return nil, fmt.Errorf("%v: 失败. 获取表所有字段. %v.%v %v:%v. %v: %v", common.CurrLine(), schemaName, tableName, host, port, err, selectSql)
 	}
 	defer rows.Close()
 
@@ -253,13 +249,14 @@ func GetSourceTableColumns(_schemaName string, _tableName string, _host string, 
 		var columnType sql.NullString
 		var extra sql.NullString
 
-		rows.Scan(&tableSchema, &tableName, &columnName, &ordinalPosition, &columnType, &extra)
+		if err := rows.Scan(&tableSchema, &tableName, &columnName, &ordinalPosition, &columnType, &extra); err != nil {
+			return nil, fmt.Errorf("%v: scan表字段出错. %v.%v. %v", common.CurrLine(), schemaName, tableName, err)
+		}
 
 		column := CreateColumn(columnName.String, columnType.String, extra.String, int(ordinalPosition.Int64))
 
 		columns = append(columns, column)
-		log.Infof("%v: 成功. 添加表字段 %v.%v.%v", common.CurrLine(), _schemaName, _tableName,
-			columnName.String)
+		log.Infof("%v: 成功. 添加表字段 %v.%v.%v", common.CurrLine(), schemaName, tableName, columnName.String)
 	}
 
 	return columns, nil
@@ -415,16 +412,13 @@ Params:
     _schemaName: 数据库名称
     _tableName: 表名称
 */
-func FindPKColumnNames(_host string, _port int, _schemaName string,
-	_tableName string) ([]string, error) {
+func FindPKColumnNames(host string, port int, schemaName string, tableName string) ([]string, error) {
 
 	pkColumnNames := make([]string, 0, 1)
 
-	instance, err := gdbc.GetDynamicInstanceByHostPort(_host, _port)
-	if err != nil {
-		errMSG := fmt.Sprintf("%v: 失败. 获取表主键. %v.%v %v:%v. %v", common.CurrLine(),
-			_schemaName, _tableName, _host, _port, err)
-		return nil, errors.New(errMSG)
+	instance, ok := gdbc.GetDynamicDBByHostPort(host, int64(port))
+	if !ok {
+		return nil, fmt.Errorf("%v: 缓存中不存在该实例(%v:%v). 获取表主键. %v.%v", common.CurrLine(), host, port, schemaName, tableName)
 	}
 
 	selectSql := `
@@ -441,11 +435,9 @@ func FindPKColumnNames(_host string, _port int, _schemaName string,
     `
 
 	// 查询数据库
-	rows, err := instance.DB.Query(selectSql, _schemaName, _tableName)
+	rows, err := instance.Query(selectSql, schemaName, tableName)
 	if err != nil {
-		errMSG := fmt.Sprintf(" %v: 失败. 获取表主键列名. %v.%v %v:%v. %v: %v",
-			common.CurrLine(), _schemaName, _tableName, _host, _port, err, selectSql)
-		return nil, errors.New(errMSG)
+		return nil, fmt.Errorf(" %v: 失败. 获取表主键列名. %v.%v %v:%v. %v: %v", common.CurrLine(), schemaName, tableName, host, port, err, selectSql)
 	}
 	defer rows.Close()
 
@@ -453,7 +445,9 @@ func FindPKColumnNames(_host string, _port int, _schemaName string,
 	for rows.Next() {
 		var columnName sql.NullString
 
-		rows.Scan(&columnName)
+		if err := rows.Scan(&columnName); err != nil {
+			return nil, fmt.Errorf("%v: scan 获取指定表的主键名称. %v.%v. %v", common.CurrLine(), schemaName, tableName, err)
+		}
 
 		pkColumnNames = append(pkColumnNames, columnName.String)
 	}
@@ -468,16 +462,13 @@ Params:
     _schemaName: 数据库名称
     _tableName: 表名称
 */
-func FindUniqueNames(_host string, _port int, _schemaName string,
-	_tableName string) ([]string, error) {
+func FindUniqueNames(host string, port int, schemaName string, tableName string) ([]string, error) {
 
 	uniqueNames := make([]string, 0, 1)
 
-	instance, err := gdbc.GetDynamicInstanceByHostPort(_host, _port)
-	if err != nil {
-		errMSG := fmt.Sprintf("%v: 失败. 获取表唯一键名称. %v.%v %v:%v. %v",
-			common.CurrLine(), _schemaName, _tableName, _host, _port, err)
-		return nil, errors.New(errMSG)
+	instance, ok := gdbc.GetDynamicDBByHostPort(host, int64(port))
+	if !ok {
+		return nil, fmt.Errorf("%v: 缓存中不存在该实例(%v:%v). 获取表唯一键名称. %v.%v", common.CurrLine(), host, port, schemaName, tableName)
 	}
 
 	selectSql := `
@@ -490,11 +481,9 @@ func FindUniqueNames(_host string, _port int, _schemaName string,
     `
 
 	// 查询数据库
-	rows, err := instance.DB.Query(selectSql, _schemaName, _tableName)
+	rows, err := instance.Query(selectSql, schemaName, tableName)
 	if err != nil {
-		errMSG := fmt.Sprintf("%v: 失败. 获取表唯一键名称. %v.%v %v:%v. %v: %v",
-			common.CurrLine(), _schemaName, _tableName, _host, _port, err, selectSql)
-		return nil, errors.New(errMSG)
+		return nil, fmt.Errorf(" %v: 失败. 获取表主键列名. %v.%v %v:%v. %v: %v", common.CurrLine(), schemaName, tableName, host, port, err, selectSql)
 	}
 	defer rows.Close()
 
@@ -502,7 +491,9 @@ func FindUniqueNames(_host string, _port int, _schemaName string,
 	for rows.Next() {
 		var uniqueName sql.NullString
 
-		rows.Scan(&uniqueName)
+		if err := rows.Scan(&uniqueName); err != nil {
+			return nil, fmt.Errorf("%v: scan 获取指定表的所有唯一键名称. %v.%v. %v", common.CurrLine(), schemaName, tableName, err)
+		}
 
 		uniqueNames = append(uniqueNames, uniqueName.String)
 	}
@@ -519,16 +510,13 @@ Params:
     _tableName: 表名称
     _uniqueName: 唯一键名称
 */
-func FindUniqueColumnNames(_host string, _port int, _schemaName string,
-	_tableName string, _uniqueName string) ([]string, error) {
+func FindUniqueColumnNames(host string, port int, schemaName string, tableName string, uniqueName string) ([]string, error) {
 
 	uniqueColumnNames := make([]string, 0, 1)
 
-	instance, err := gdbc.GetDynamicInstanceByHostPort(_host, _port)
-	if err != nil {
-		errMSG := fmt.Sprintf("%v: 失败. 获取表唯一键列名. 唯一键名称: %v. %v.%v %v:%v. %v",
-			common.CurrLine(), _uniqueName, _schemaName, _tableName, _host, _port, err)
-		return nil, errors.New(errMSG)
+	instance, ok := gdbc.GetDynamicDBByHostPort(host, int64(port))
+	if !ok {
+		return nil, fmt.Errorf("%v: 缓存中不存在该实例(%v:%v). 获取表唯一键列名. 唯一键名称: %v. %v.%v", common.CurrLine(), host, port, uniqueName, schemaName, tableName)
 	}
 
 	selectSql := `
@@ -541,11 +529,9 @@ func FindUniqueColumnNames(_host string, _port int, _schemaName string,
     `
 
 	// 查询数据库
-	rows, err := instance.DB.Query(selectSql, _schemaName, _tableName, _uniqueName)
+	rows, err := instance.Query(selectSql, schemaName, tableName, uniqueName)
 	if err != nil {
-		errMSG := fmt.Sprintf("%v, 失败. 获取表唯一键列名. %v.%v %v:%v. %v: %v",
-			common.CurrLine(), _schemaName, _tableName, _host, _port, err, selectSql)
-		return nil, errors.New(errMSG)
+		return nil, fmt.Errorf(" %v: 失败. 获取表唯一键列名. %v.%v %v:%v %v: %v", common.CurrLine(), schemaName, tableName, host, port, err, selectSql)
 	}
 	defer rows.Close()
 
@@ -553,7 +539,9 @@ func FindUniqueColumnNames(_host string, _port int, _schemaName string,
 	for rows.Next() {
 		var columnName sql.NullString
 
-		rows.Scan(&columnName)
+		if err := rows.Scan(&columnName); err != nil {
+			return nil, fmt.Errorf("%v: scan 获取表唯一键列名. 唯一键名: %v. %v.%v %v", common.CurrLine(), uniqueName, schemaName, tableName, err)
+		}
 
 		uniqueColumnNames = append(uniqueColumnNames, columnName.String)
 	}
@@ -562,18 +550,13 @@ func FindUniqueColumnNames(_host string, _port int, _schemaName string,
 
 }
 
-/* 获取表的所有的唯一键包含的列, 不重复, 包括的主键列
-
- */
-func FindSourceDistinctUKColumnNames(_host string, _port int, _schemaName string,
-	_tableName string) ([]string, error) {
+/* 获取表的所有的唯一键包含的列, 不重复, 包括的主键列 */
+func FindSourceDistinctUKColumnNames(host string, port int, schemaName string, tableName string) ([]string, error) {
 	distinctUK := make([]string, 0, 1)
 
-	instance, err := gdbc.GetDynamicInstanceByHostPort(_host, _port)
-	if err != nil {
-		errMSG := fmt.Sprintf("%v: 失败. 获取表所有的唯一键列名(包括主键). %v.%v %v:%v. %v",
-			common.CurrLine(), _schemaName, _tableName, _host, _port, err)
-		return nil, errors.New(errMSG)
+	instance, ok := gdbc.GetDynamicDBByHostPort(host, int64(port))
+	if !ok {
+		return nil, fmt.Errorf("%v: 缓存中不存在该实例(%v:%v). 获取表所有的唯一键列名(包括主键). %v.%v", common.CurrLine(), host, port, schemaName, tableName)
 	}
 
 	selectSql := `
@@ -590,11 +573,9 @@ func FindSourceDistinctUKColumnNames(_host string, _port int, _schemaName string
     `
 
 	// 查询数据库
-	rows, err := instance.DB.Query(selectSql, _schemaName, _tableName)
+	rows, err := instance.Query(selectSql, schemaName, tableName)
 	if err != nil {
-		errMSG := fmt.Sprintf("%v, 失败. 获取表唯一键列名. %v.%v %v:%v. %v: %v",
-			common.CurrLine(), _schemaName, _tableName, _host, _port, err, selectSql)
-		return nil, errors.New(errMSG)
+		return nil, fmt.Errorf(" %v: 失败. 获取表所有的唯一键列名(包括主键). %v.%v %v:%v %v: %v", common.CurrLine(), schemaName, tableName, host, port, err, selectSql)
 	}
 	defer rows.Close()
 
@@ -602,7 +583,9 @@ func FindSourceDistinctUKColumnNames(_host string, _port int, _schemaName string
 	for rows.Next() {
 		var columnName sql.NullString
 
-		rows.Scan(&columnName)
+		if err := rows.Scan(&columnName); err != nil {
+			return nil, fmt.Errorf("%v: scan 获取表所有的唯一键列名(包括主键) %v.%v %v", common.CurrLine(), schemaName, tableName, err)
+		}
 
 		distinctUK = append(distinctUK, columnName.String)
 	}
@@ -621,7 +604,7 @@ func FindSourceDistinctUKColumnNames(_host string, _port int, _schemaName string
 
 Params:
     _configMap: 元信息配置文件
-    _table: 需要迁移打表
+    _table: 需要迁移的表
 */
 func GetTargetCreateTableSql(_configMap *config.ConfigMap, _table *Table) (string, error) {
 	var createTableSql string
@@ -631,7 +614,7 @@ func GetTargetCreateTableSql(_configMap *config.ConfigMap, _table *Table) (strin
 		// 获取临时匿名表
 		anonymousTableName := common.GetAnonymousTableName(_table.SourceName)
 
-		// 先清除存在一样打匿名表
+		// 先清除存在一样的匿名表
 		err := DropTable(_configMap.Source.Host.String,
 			int(_configMap.Source.Port.Int64), _table.SourceSchema, anonymousTableName)
 		if err != nil {
@@ -722,70 +705,54 @@ Params:
     _schemaName: 数据库名称
     _tableName: 表名称
 */
-func GetCreateTableSql(_host string, _port int, _schemaName string,
-	_tableName string) (string, error) {
-
-	instance, err := gdbc.GetDynamicInstanceByHostPort(_host, _port)
-	if err != nil {
-		errMSG := fmt.Sprintf("%v: 失败. 获取表创建sql. %v.%v %v:%v. %v",
-			common.CurrLine(), _schemaName, _tableName, _host, _port, err)
-		return "", errors.New(errMSG)
+func GetCreateTableSql(host string, port int, schemaName string, tableName string) (string, error) {
+	instance, ok := gdbc.GetDynamicDBByHostPort(host, int64(port))
+	if !ok {
+		return "", fmt.Errorf("%v: 缓存中不存在该实例(%v:%v). 获取表创建sql. %v.%v", common.CurrLine(), host, port, schemaName, tableName)
 	}
 
-	selectSql := fmt.Sprintf("/* go-d-bus */ SHOW CREATE TABLE `%v`.`%v`",
-		_schemaName, _tableName)
+	selectSql := fmt.Sprintf("/* go-d-bus */ SHOW CREATE TABLE `%v`.`%v`", schemaName, tableName)
 
 	// 查询数据库
-	rows, err := instance.DB.Query(selectSql)
+	rows, err := instance.Query(selectSql)
 	if err != nil {
-		errMSG := fmt.Sprintf("%v: 失败. 获取表创建sql. %v.%v %v:%v. %v. %v %v",
-			common.CurrLine(), _schemaName, _tableName, _host, _port, err, selectSql)
-		return "", errors.New(errMSG)
+		return "", fmt.Errorf(" %v: 失败. 获取表创建sql %v.%v %v:%v %v: %v", common.CurrLine(), schemaName, tableName, host, port, err, selectSql)
 	}
 	defer rows.Close()
 
 	// 获取创建语句
-	var tableName sql.NullString
+	var rsTableName sql.NullString
 	var createTableSql sql.NullString
 	for rows.Next() {
-		rows.Scan(&tableName, &createTableSql)
+		rows.Scan(&rsTableName, &createTableSql)
 	}
 
 	if !createTableSql.Valid || createTableSql.String == "" {
-		errMSG := fmt.Sprintf("%v: 失败. sql执行成功, 但是没有获取到建表sql. %v.%v %v:%v. %v. %v",
-			common.CurrLine(), _schemaName, _tableName, _host, _port, err, selectSql)
-		return "", errors.New(errMSG)
+		return "", fmt.Errorf("%v: 失败. sql执行成功, 但是没有获取到建表sql. %v.%v %v:%v %v. %v", common.CurrLine(), schemaName, tableName, host, port, err, selectSql)
 	}
 
 	return createTableSql.String, nil
 }
 
-/* 清除存在打匿名表
+/* 清除存在的匿名表
 Params:
     _host: 实例host
     _port: 实例port
     _schemaName: 数据库名称
     _tableName: 表名称
 */
-func DropTable(_host string, _port int, _schemaName string,
-	_tableName string) error {
-
-	instance, err := gdbc.GetDynamicInstanceByHostPort(_host, _port)
-	if err != nil {
-		errMSG := fmt.Sprintf("%v: 失败. 删除匿名表. %v.%v %v:%v. %v",
-			common.CurrLine(), _schemaName, _tableName, _host, _port, err)
-		return errors.New(errMSG)
+func DropTable(host string, port int, schemaName string, tableName string) error {
+	instance, ok := gdbc.GetDynamicDBByHostPort(host, int64(port))
+	if !ok {
+		return fmt.Errorf("%v: 缓存中不存在该实例(%v:%v). 删除匿名表sql. %v.%v", common.CurrLine(), host, port, schemaName, tableName)
 	}
 
-	dropSql := fmt.Sprintf("/* go-d-bus */ DROP TABLE IF EXISTS `%v`.`%v`",
-		_schemaName, _tableName)
+	dropSql := fmt.Sprintf("/* go-d-bus */ DROP TABLE IF EXISTS `%v`.`%v`", schemaName, tableName)
 
 	// 查询数据库
-	_, err = instance.DB.Exec(dropSql)
+	_, err := instance.Exec(dropSql)
 	if err != nil {
-		errMSG := fmt.Sprintf("%v: 失败. 清理匿名表. %v.%v %v:%v. %v. %v",
-			common.CurrLine(), _schemaName, _tableName, _host, _port, err, dropSql)
-		return errors.New(errMSG)
+		return fmt.Errorf("%v: 失败. 清理匿名表. %v.%v %v:%v. %v. %v", common.CurrLine(), schemaName, tableName, host, port, err, dropSql)
 	}
 
 	return nil
@@ -799,25 +766,18 @@ Params:
     _fromName: 以这个表为准
     _toName: 最终生成的表名
 */
-func CreateTableFromTable(_host string, _port int, _schemaName string,
-	_fromName string, _toName string) error {
-
-	instance, err := gdbc.GetDynamicInstanceByHostPort(_host, _port)
-	if err != nil {
-		errMSG := fmt.Sprintf("%v: 失败. 创建表. %v.%v -> %v %v:%v. %v",
-			common.CurrLine(), _schemaName, _fromName, _toName, _host, _port, err)
-		return errors.New(errMSG)
+func CreateTableFromTable(host string, port int, schemaName string, fromName string, toName string) error {
+	instance, ok := gdbc.GetDynamicDBByHostPort(host, int64(port))
+	if !ok {
+		return fmt.Errorf("%v: 缓存中不存在该实例(%v:%v). 创建表. %v.%v -> %v %v:%v", common.CurrLine(), schemaName, fromName, toName, host, port)
 	}
 
-	createSql := fmt.Sprintf("/* go-d-bus */ CREATE TABLE IF NOT EXISTS `%v`.`%v` LIKE `%v`.`%v`",
-		_schemaName, _toName, _schemaName, _fromName)
+	createSql := fmt.Sprintf("/* go-d-bus */ CREATE TABLE IF NOT EXISTS `%v`.`%v` LIKE `%v`.`%v`", schemaName, toName, schemaName, fromName)
 
 	// 查询数据库
-	_, err = instance.DB.Exec(createSql)
+	_, err := instance.Exec(createSql)
 	if err != nil {
-		errMSG := fmt.Sprintf("%v: 失败. 创建表. %v.%v -> %v %v:%v. %v. %v",
-			common.CurrLine(), _schemaName, _fromName, _toName, _host, _port, err, createSql)
-		return errors.New(errMSG)
+		return fmt.Errorf("%v: 失败. 创建表. %v.%v -> %v %v:%v. %v. %v", common.CurrLine(), schemaName, fromName, toName, host, port, err, createSql)
 	}
 
 	return nil
@@ -832,26 +792,19 @@ Params:
     _dropColumnNames: 需要删除的字段名称
     _dropIndexNames: 需要删除的所有名称
 */
-func DropTableColumnAndIndex(_host string, _port int, _schemaName string,
-	_tableName string, _dropColumnNames []string, _dropIndexNames []string) error {
-
+func DropTableColumnAndIndex(host string, port int, schemaName string, tableName string, dropColumnNames []string, dropIndexNames []string) error {
 	// 获取 ALTER TBALE DROP 语句
-	alterDropSql := common.CreateDropColumnSql(_schemaName, _tableName,
-		_dropColumnNames, _dropIndexNames)
+	alterDropSql := common.CreateDropColumnSql(schemaName, tableName, dropColumnNames, dropIndexNames)
 
-	instance, err := gdbc.GetDynamicInstanceByHostPort(_host, _port)
-	if err != nil {
-		errMSG := fmt.Sprintf("%v: 失败. 删除表的字段和索引. %v.%v %v:%v. %v %v",
-			common.CurrLine(), _schemaName, _tableName, _host, _port, err, alterDropSql)
-		return errors.New(errMSG)
+	instance, ok := gdbc.GetDynamicDBByHostPort(host, int64(port))
+	if !ok {
+		return fmt.Errorf("%v: 缓存中不存在该实例(%v:%v). 删除表的字段和索引. %v.%v %v:%v. %v", common.CurrLine(), schemaName, tableName, host, port, alterDropSql)
 	}
 
 	// 查询数据库
-	_, err = instance.DB.Exec(alterDropSql)
+	_, err := instance.Exec(alterDropSql)
 	if err != nil {
-		errMSG := fmt.Sprintf("%v: 失败. 执行删除表字段和索引. %v.%v %v:%v. %v %v",
-			common.CurrLine(), _schemaName, _tableName, _host, _port, err, alterDropSql)
-		return errors.New(errMSG)
+		return fmt.Errorf("%v: 失败. 执行删除表字段和索引. %v.%v %v:%v. %v %v", common.CurrLine(), schemaName, tableName, host, port, err, alterDropSql)
 	}
 
 	return nil

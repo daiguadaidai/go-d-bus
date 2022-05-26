@@ -12,5 +12,4 @@ require (
 	github.com/outbrain/golib v0.0.0-20200503083229-2531e5dbcc71
 	github.com/spf13/cobra v1.4.0
 	go.uber.org/atomic v1.7.0
-	golang.org/x/net v0.0.0-20220520000938-2e3eb7b945c2
 )

@@ -1,19 +1,19 @@
 package dao
 
 import (
+	"database/sql"
 	"github.com/daiguadaidai/go-d-bus/gdbc"
 	"github.com/daiguadaidai/go-d-bus/model"
 	"github.com/jinzhu/gorm"
-	"database/sql"
 )
 
 type TaskDao struct{}
 
 func (this *TaskDao) GetByID(id int64, columnStr string) (*model.Task, error) {
-	ormInstance := gdbc.GetOrmInstance()
+	ormDB := gdbc.GetOrmInstance()
 
 	task := new(model.Task)
-	err := ormInstance.DB.Select(columnStr).Where("id = ?", id).First(task).Error
+	err := ormDB.Select(columnStr).Where("id = ?", id).First(task).Error
 	if err != nil {
 		if err == gorm.ErrRecordNotFound {
 			return nil, nil
@@ -25,10 +25,10 @@ func (this *TaskDao) GetByID(id int64, columnStr string) (*model.Task, error) {
 }
 
 func (this *TaskDao) GetByTaskUUID(taskUUID string, columnStr string) (*model.Task, error) {
-	ormInstance := gdbc.GetOrmInstance()
+	ormDB := gdbc.GetOrmInstance()
 
 	task := new(model.Task)
-	err := ormInstance.DB.Select(columnStr).Where("task_uuid = ?", taskUUID).First(task).Error
+	err := ormDB.Select(columnStr).Where("task_uuid = ?", taskUUID).First(task).Error
 	if err != nil {
 		if err == gorm.ErrRecordNotFound {
 			return nil, nil
@@ -39,11 +39,11 @@ func (this *TaskDao) GetByTaskUUID(taskUUID string, columnStr string) (*model.Ta
 	return task, nil
 }
 
-func (this *TaskDao) Count(_taskUUID string) int {
-	ormInstance := gdbc.GetOrmInstance()
+func (this *TaskDao) Count(taskUUID string) int {
+	ormDB := gdbc.GetOrmInstance()
 
 	count := 0
-	ormInstance.DB.Model(&model.Task{}).Where("task_uuid = ?", _taskUUID).Count(&count)
+	ormDB.Model(&model.Task{}).Where("task_uuid = ?", taskUUID).Count(&count)
 
 	return count
 }
@@ -52,14 +52,11 @@ func (this *TaskDao) Count(_taskUUID string) int {
 Params:
     _taskUUID: 任务ID
 */
-func (this *TaskDao) TagTaskRowCopyComplete(_taskUUID string) int {
-	ormInstance := gdbc.GetOrmInstance()
+func (this *TaskDao) TagTaskRowCopyComplete(taskUUID string) int {
+	ormDB := gdbc.GetOrmInstance()
 
 	updateTask := model.Task{RowCopyComplete: sql.NullInt64{1, true}}
-	affected := ormInstance.DB.Model(&model.Task{}).Where(
-		"`task_uuid`=?",
-		_taskUUID,
-	).Updates(updateTask).RowsAffected
+	affected := ormDB.Model(&model.Task{}).Where("`task_uuid`=?", taskUUID).Updates(updateTask).RowsAffected
 
 	return int(affected)
 }
@@ -68,12 +65,12 @@ func (this *TaskDao) TagTaskRowCopyComplete(_taskUUID string) int {
 Params:
     _taskUUID: 任务ID
 */
-func (this *TaskDao) TaskRowCopyIsComplete(_taskUUID string) (bool, error) {
-	ormInstance := gdbc.GetOrmInstance()
+func (this *TaskDao) TaskRowCopyIsComplete(taskUUID string) (bool, error) {
+	ormDB := gdbc.GetOrmInstance()
 
 	task := new(model.Task)
 	columnStr := "row_copy_complete"
-	err := ormInstance.DB.Select(columnStr).Where("task_uuid = ?", _taskUUID).First(task).Error
+	err := ormDB.Select(columnStr).Where("task_uuid = ?", taskUUID).First(task).Error
 	if err != nil {
 		return true, err
 	}

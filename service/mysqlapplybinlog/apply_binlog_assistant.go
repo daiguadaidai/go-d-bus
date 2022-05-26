@@ -1,20 +1,21 @@
 package mysqlapplybinlog
 
 import (
+	"fmt"
 	"github.com/daiguadaidai/go-d-bus/common"
 	"github.com/daiguadaidai/go-d-bus/dao"
+	"github.com/daiguadaidai/go-d-bus/gdbc"
 	"github.com/daiguadaidai/go-d-bus/matemap"
+	"github.com/outbrain/golib/log"
 	"syscall"
 	"time"
-	"github.com/outbrain/golib/log"
-	"github.com/daiguadaidai/go-d-bus/gdbc"
 )
 
 /* 判断是否是需要应用的表
 Params:
 	_schema: 需要检测的数据库
 	_table: 需要检测的表
- */
+*/
 func (this *ApplyBinlog) IsApplyTable(_schema string, _table string) bool {
 	_, ok := this.NeedApplyTableMap[common.FormatTableName(_schema, _table, "")]
 
@@ -24,14 +25,14 @@ func (this *ApplyBinlog) IsApplyTable(_schema string, _table string) bool {
 // 增加1 需要应用的事件个数
 func (this *ApplyBinlog) IncrNeedApplyEventCount() {
 	this.NeedApplyEventCountRWMutex.Lock()
-	this.NeedApplyEventCount ++
+	this.NeedApplyEventCount++
 	this.NeedApplyEventCountRWMutex.Unlock()
 }
 
 // 减少1 需要应用的事件个数
 func (this *ApplyBinlog) DecrNeedApplyEventCount() {
 	this.NeedApplyEventCountRWMutex.Lock()
-	this.NeedApplyEventCount --
+	this.NeedApplyEventCount--
 	this.NeedApplyEventCountRWMutex.Unlock()
 }
 
@@ -57,13 +58,13 @@ func (this *ApplyBinlog) WaitingApplyEventAndReplaceTableMap(_schemaName string,
 
 			migrationTable, err := matemap.NewTable(this.ConfigMap, _schemaName, _tableName)
 			if err != nil {
-				log.Errorf("%v: 失败. 重新生成需要迁移的表元数据信息. " +
+				log.Errorf("%v: 失败. 重新生成需要迁移的表元数据信息. "+
 					"%v.%v 退出迁移 %v",
 					common.CurrLine(), _schemaName, _tableName, err)
 				syscall.Exit(1)
 			}
 			if migrationTable == nil {
-				log.Errorf("%v: 失败. 无法重新生成表元数据信息. " +
+				log.Errorf("%v: 失败. 无法重新生成表元数据信息. "+
 					"%v.%v 退出迁移 %v",
 					common.CurrLine(), _schemaName, _tableName, err)
 				syscall.Exit(1)
@@ -78,7 +79,7 @@ func (this *ApplyBinlog) WaitingApplyEventAndReplaceTableMap(_schemaName string,
 
 			return
 		} else {
-			log.Warningf("%v: 检测到还有binlog event没有消费完成. 等待消费, " +
+			log.Warningf("%v: 检测到还有binlog event没有消费完成. 等待消费, "+
 				"再进行生成表的元数据. %v.%v",
 				common.CurrLine(), _schemaName, _tableName)
 		}
@@ -115,13 +116,13 @@ Params:
 	_appliedLogPos: 已经应用到的日志位点
 	_stopLogFile: 停止位点文件
 	_stopLogPos: 停止位点信息
- */
+*/
 func UpdateSourceLogPosInfo(
 	_taskUUID string,
 	_startLogFile string,
 	_startLogPos int,
 	_parseLogFile string,
-	_parseLogPos uint32,
+	_parseLogPos int,
 	_appliedLogFile string,
 	_appliedLogPos int,
 	_stopLogFile string,
@@ -137,7 +138,7 @@ func UpdateSourceLogPosInfo(
 /* 获取指定任务的停止位点信息
 Params:
 	_taskUUID: 任务UUID
- */
+*/
 func GetStopLogFilePos(_taskUUID string) (string, int) {
 	var stopLogFile string = ""
 	var stopLogPos int = -1
@@ -165,20 +166,22 @@ func GetStopLogFilePos(_taskUUID string) (string, int) {
 Params:
 	_host: 实例IP
 	_port: 实例端口
- */
-func ShowMasterStatus(_host string, _port int) (string, int, error) {
-	instance, err := gdbc.GetDynamicInstanceByHostPort(_host, _port)
-	if err != nil {
-		return "", -1, err
+*/
+func ShowMasterStatus(host string, port int) (string, int, error) {
+	instance, ok := gdbc.GetDynamicDBByHostPort(host, int64(port))
+	if !ok {
+		return "", -1, fmt.Errorf("%v: 缓存中不存在该实例(%v:%v). 执行 show master status 获取数据库位点信息", common.CurrLine(), host, port)
 	}
 
 	sql := "/* go-d-bus */ SHOW MASTER STATUS"
-	row := instance.DB.QueryRow(sql)
+	row := instance.QueryRow(sql)
 
 	var logFile string
 	var logPos int
 	var ignore interface{}
-	row.Scan(&logFile, &logPos, &ignore, &ignore, &ignore)
+	if err := row.Scan(&logFile, &logPos, &ignore, &ignore, &ignore); err != nil {
+		return "", -1, fmt.Errorf("%v: scan 字段出错, 执行 show master status 获取数据库位点信息. %v", common.CurrLine(), err)
+	}
 
 	return logFile, logPos, nil
 }
@@ -187,7 +190,7 @@ func ShowMasterStatus(_host string, _port int) (string, int, error) {
 Params:
 	_host: 实例IP
 	_port: 实例端口
- */
+*/
 func UpdateTargetLogFilePos(_taskUUID string, _logFile string, _logPos int) int {
 	targetDao := new(dao.TargetDao)
 	affected := targetDao.UpdateLogFilePos(_taskUUID, _logFile, _logPos)

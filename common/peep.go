@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"crypto/aes"
 	"crypto/cipher"
+	"crypto/md5"
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
@@ -11,7 +12,6 @@ import (
 	"io"
 	math_rand "math/rand"
 	"sync"
-	"crypto/md5"
 )
 
 func RandString(n int) string {
@@ -40,7 +40,7 @@ func RandString(n int) string {
 }
 
 // key
-const aesTable = "xWduqtCDMLxiDHIMG0FpXzp2LGIehp2s"
+const aesTable = "wWfmcT3DZlx1VYZzAvqYERmYSTX10tM2"
 
 var (
 	block cipher.Block
@@ -79,6 +79,10 @@ func Decrypt(crypted string) (string, error) {
 	iv := decryptText[:aes.BlockSize]
 	decryptText = decryptText[aes.BlockSize:]
 
+	if len(decryptText) == 0 {
+		return "", errors.New("需要解密的字符串, 不匹配解密算法, 需要解密的串最低长度是64")
+	}
+
 	// 验证输入参数
 	// 必须为aes.Blocksize的倍数
 	if len(decryptText)%aes.BlockSize != 0 {
@@ -107,7 +111,7 @@ func PKCS5UnPadding(origData []byte) []byte {
 /* 通过字符串计算出一个数字的hash值
 Params:
 	_value: 输入的字符串值
- */
+*/
 func GenerateHashByString(_value string) int {
 	Md5Inst := md5.New()
 	Md5Inst.Write([]byte(_value))
