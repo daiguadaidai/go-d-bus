@@ -4,8 +4,7 @@ import (
 	"fmt"
 	"github.com/daiguadaidai/go-d-bus/common"
 	"github.com/daiguadaidai/go-d-bus/gdbc"
-	"github.com/juju/errors"
-	"github.com/outbrain/golib/log"
+	"github.com/daiguadaidai/go-d-bus/logger"
 )
 
 // 保存主键一个范围的值
@@ -103,15 +102,13 @@ func (this *PrimaryRangeValue) GetNextPrimaryRangeValue(maxRowCnt int, host stri
 	// 通过表名获取相关表映射元数据信息
 	table, err := GetMigrationTable(tableName)
 	if err != nil {
-		errMSG := fmt.Sprintf("%v: 失败. 获取下一个主键范围值(获取迁移的表元数据). %v. %v",
-			common.CurrLine(), tableName, err)
-		return nil, errors.New(errMSG)
+		return nil, fmt.Errorf("失败. 获取下一个主键范围值(获取迁移的表元数据). %v. %v", tableName, err)
 	}
 
 	// 获取操作相关表的实例
 	instance, ok := gdbc.GetDynamicDBByHostPort(host, int64(port))
 	if !ok {
-		return nil, fmt.Errorf("%v: 缓存中不存在该实例(%v:%v). 获取下一个主键范围值. %v", common.CurrLine(), host, port, tableName)
+		return nil, fmt.Errorf("缓存中不存在该实例(%v:%v). 获取下一个主键范围值. %v", host, port, tableName)
 	}
 
 	// 获取该表的主键名
@@ -123,11 +120,9 @@ func (this *PrimaryRangeValue) GetNextPrimaryRangeValue(maxRowCnt int, host stri
 	row := instance.QueryRow(selectSql, maxValueSlice...)
 	nextValue, err := common.Row2Map(row, sourceTablePKNames, table.FindSourcePKColumnTypes())
 	if err != nil {
-		errMSG := fmt.Sprintf("%v: 失败. 获取表row copy 下一个主键值(row 装换map出错). %v. %v. %v",
-			common.CurrLine(), tableName, err, selectSql)
-		return nil, errors.New(errMSG)
+		return nil, fmt.Errorf("失败. 获取表row copy 下一个主键值(row 装换map出错). %v. %v. %v", tableName, err, selectSql)
 	}
-	log.Infof("%v: 成功. 获取表 row copy 下一个主键值, %v: %v", common.CurrLine(), tableName, nextValue)
+	logger.M.Infof("成功. 获取表 row copy 下一个主键值, %v: %v", tableName, nextValue)
 
 	nextPrimaryRangeValue := NewPrimaryRangeValue("-1", this.Schema, this.Table, this.MaxValue, nextValue)
 

@@ -28,12 +28,12 @@ func GetSourceRowsChecksumCode(host string, port int, priamryRangeValue *matemap
 	// 获取数据库实例
 	instance, ok := gdbc.GetDynamicDBByHostPort(host, int64(port))
 	if !ok {
-		return int(checksumCode.Int64), fmt.Errorf("%v: 缓存中不存在该实例(%v:%v). 获取源数据库实例(获取多行checksum code时)", common.CurrLine(), host, port)
+		return int(checksumCode.Int64), fmt.Errorf("缓存中不存在该实例(%v:%v). 获取源数据库实例(获取多行checksum code时)", host, port)
 	}
 
 	if err := instance.QueryRow(table.GetSelSourceRowsChecksumSqlTpl(), primaryMinValue...).Scan(&checksumCode); err != nil {
-		return int(checksumCode.Int64), fmt.Errorf("%v: 失败. 获取源实例表多行checksum值. %v:%v. %v:%v. min:%v, max:%v. %v",
-			common.CurrLine(), priamryRangeValue.Schema, priamryRangeValue.Table, host, port, priamryRangeValue.MinValue, priamryRangeValue.MaxValue, err)
+		return int(checksumCode.Int64), fmt.Errorf("失败. 获取源实例表多行checksum值. %v:%v. %v:%v. min:%v, max:%v. %v",
+			priamryRangeValue.Schema, priamryRangeValue.Table, host, port, priamryRangeValue.MinValue, priamryRangeValue.MaxValue, err)
 	}
 
 	return int(checksumCode.Int64), nil
@@ -55,12 +55,12 @@ func GetTargetRowsChecksumCode(host string, port int, priamryRangeValue *matemap
 	// 获取数据库实例
 	instance, ok := gdbc.GetDynamicDBByHostPort(host, int64(port))
 	if !ok {
-		return int(checksumCode.Int64), fmt.Errorf("%v: 缓存中不存在该实例(%v:%v). 获取目标数据库实例(获取多行checksum code时)", common.CurrLine(), host, port)
+		return int(checksumCode.Int64), fmt.Errorf("缓存中不存在该实例(%v:%v). 获取目标数据库实例(获取多行checksum code时)", host, port)
 	}
 
 	if err := instance.QueryRow(table.GetSelTargetRowsChecksumSqlTpl(), primaryMinValue...).Scan(&checksumCode); err != nil {
-		return int(checksumCode.Int64), fmt.Errorf("%v: 失败. 获取目标实例表多行checksum值. %v:%v. %v:%v. min:%v, max:%v. %v",
-			common.CurrLine(), priamryRangeValue.Schema, priamryRangeValue.Table, host, port, priamryRangeValue.MinValue, priamryRangeValue.MaxValue, err)
+		return int(checksumCode.Int64), fmt.Errorf("失败. 获取目标实例表多行checksum值. %v:%v. %v:%v. min:%v, max:%v. %v",
+			priamryRangeValue.Schema, priamryRangeValue.Table, host, port, priamryRangeValue.MinValue, priamryRangeValue.MaxValue, err)
 	}
 
 	return int(checksumCode.Int64), nil
@@ -75,7 +75,7 @@ func CreateDiffRecord(taskUUID string, priamryRangeValue *matemap.PrimaryRangeVa
 	// 获取需要迁移的表的元数据
 	table, err := matemap.GetMigrationTableBySchemaTable(priamryRangeValue.Schema, priamryRangeValue.Table)
 	if err != nil {
-		return fmt.Errorf("%v: 失败. 获取目标需要迁移的表(保存不一致数据). %v:%v. %v", common.CurrLine(), priamryRangeValue.Schema, priamryRangeValue.Table, err)
+		return fmt.Errorf("失败. 获取目标需要迁移的表(保存不一致数据). %v:%v. %v", priamryRangeValue.Schema, priamryRangeValue.Table, err)
 	}
 
 	minValue, err := common.Map2Json(priamryRangeValue.MinValue) // 获取范围最小值
@@ -126,7 +126,7 @@ func FindSourcePKRows(host string, port int, primaryRangeValue *matemap.PrimaryR
 	// 获取源实例
 	instance, ok := gdbc.GetDynamicDBByHostPort(host, int64(port))
 	if !ok {
-		return nil, fmt.Errorf("%v: 缓存中不存在该实例(%v:%v). 获取源实例失败(修复数据, 获取所有主键值)", common.CurrLine(), host, port)
+		return nil, fmt.Errorf("缓存中不存在该实例(%v:%v). 获取源实例失败(修复数据, 获取所有主键值)", host, port)
 	}
 
 	// 获取范围值, 用于sql语句中的占位符
@@ -134,12 +134,12 @@ func FindSourcePKRows(host string, port int, primaryRangeValue *matemap.PrimaryR
 	rows, err := instance.Query(table.GetSelPerBatchSourcePKSqlTpl(), minMaxValue...)
 	defer rows.Close()
 	if err != nil {
-		return nil, fmt.Errorf("%v: 查询需要fix数据的所有主键值(修复数据, 获取所有主键值). %v. %v", common.CurrLine(), table.GetSelPerBatchSourcePKSqlTpl(), err)
+		return nil, fmt.Errorf("查询需要fix数据的所有主键值(修复数据, 获取所有主键值). %v. %v", table.GetSelPerBatchSourcePKSqlTpl(), err)
 	}
 
 	rs, err := helper.GetRows(rows)
 	if err != nil {
-		return nil, fmt.Errorf("%v: , checksum 获取源数据主键范围值的所有行出错. %v.", common.CurrLine(), err)
+		return nil, fmt.Errorf("checksum 获取源数据主键范围值的所有行出错. %v.", err)
 	}
 
 	return rs, nil
@@ -158,12 +158,12 @@ func GetSourceRowChecksumCode(host string, port int, primaryValues []interface{}
 	// 获取数据库实例
 	instance, ok := gdbc.GetDynamicDBByHostPort(host, int64(port))
 	if !ok {
-		return int(checksumCode.Int64), fmt.Errorf("%v: 缓存中不存在该实例(%v:%v). 获取源数据库实例(获取单行checksum code时)", common.CurrLine(), host, port)
+		return int(checksumCode.Int64), fmt.Errorf("缓存中不存在该实例(%v:%v). 获取源数据库实例(获取单行checksum code时)", host, port)
 	}
 
 	if err := instance.QueryRow(table.GetSelSourceRowChecksumSqlTpl(), primaryValues...).Scan(&checksumCode); err != nil {
-		return int(checksumCode.Int64), fmt.Errorf("%v: 失败. 获取源实例表单行checksum值. %v:%v. %v:%v. primary: %v. %v",
-			common.CurrLine(), table.SourceSchema, table.SourceName, host, port, primaryValues, err)
+		return int(checksumCode.Int64), fmt.Errorf("失败. 获取源实例表单行checksum值. %v:%v. %v:%v. primary: %v. %v",
+			table.SourceSchema, table.SourceName, host, port, primaryValues, err)
 	}
 
 	return int(checksumCode.Int64), nil
@@ -182,12 +182,12 @@ func GetTargetRowChecksumCode(host string, port int, primaryValues []interface{}
 	// 获取数据库实例
 	instance, ok := gdbc.GetDynamicDBByHostPort(host, int64(port))
 	if !ok {
-		return int(checksumCode.Int64), fmt.Errorf("%v: 缓存中不存在该实例(%v:%v). 获取目标数据库实例(获取单行checksum code时)", common.CurrLine(), host, port)
+		return int(checksumCode.Int64), fmt.Errorf("缓存中不存在该实例(%v:%v). 获取目标数据库实例(获取单行checksum code时)", host, port)
 	}
 
 	if err := instance.QueryRow(table.GetSelTargetRowChecksumSqlTpl(), primaryValues...).Scan(&checksumCode); err != nil {
-		return int(checksumCode.Int64), fmt.Errorf("%v: 失败. 获取目标实例表单行checksum值. %v:%v. %v:%v. primary: %v. %v",
-			common.CurrLine(), table.SourceSchema, table.SourceName, host, port, primaryValues, err)
+		return int(checksumCode.Int64), fmt.Errorf("失败. 获取目标实例表单行checksum值. %v:%v. %v:%v. primary: %v. %v",
+			table.SourceSchema, table.SourceName, host, port, primaryValues, err)
 	}
 
 	return int(checksumCode.Int64), nil
@@ -204,14 +204,14 @@ func DeleteTargetRow(host string, port int, primaryValues []interface{}, table *
 	// 获取实例
 	instance, ok := gdbc.GetDynamicDBByHostPort(host, int64(port))
 	if !ok {
-		return fmt.Errorf("%v: 缓存中不存在该实例(%v:%v). 通过主键删除目标行", common.CurrLine(), host, port)
+		return fmt.Errorf("缓存中不存在该实例(%v:%v). 通过主键删除目标行", host, port)
 	}
 
 	deleteSql := table.GetDelSqlTpl(primaryValues)
 
 	// 开启事物执行sql
 	if _, err := instance.Exec(deleteSql); err != nil {
-		return fmt.Errorf("%v: (%v:%v). 通过主键删除目标行. %v", common.CurrLine(), host, port, err)
+		return fmt.Errorf("(%v:%v). 通过主键删除目标行. %v", host, port, err)
 	}
 
 	return nil
@@ -228,7 +228,7 @@ func GetSourceRowByPK(host string, port int, primaryValues []interface{}, table 
 	// 获取数据库实例
 	instance, ok := gdbc.GetDynamicDBByHostPort(host, int64(port))
 	if !ok {
-		return nil, fmt.Errorf("%v: 缓存中不存在该实例(%v:%v). 获取源数据库实例(进行修复数据, 通过主键获取源表数据)", common.CurrLine(), host, port)
+		return nil, fmt.Errorf("缓存中不存在该实例(%v:%v). 获取源数据库实例(进行修复数据, 通过主键获取源表数据)", host, port)
 	}
 
 	columnLen := len(table.SourceUsefulColumns)
@@ -241,12 +241,12 @@ func GetSourceRowByPK(host string, port int, primaryValues []interface{}, table 
 	rows, err := instance.Query(table.GetSelSourceRowSqlTpl(), primaryValues...)
 	defer rows.Close()
 	if err != nil {
-		return nil, fmt.Errorf("%v: 查询数据库失败, 通过主键在源表获取需要修复的行数据. %v. value: %v %v", common.CurrLine(), table.GetSelSourceRowSqlTpl, primaryValues, err)
+		return nil, fmt.Errorf("查询数据库失败, 通过主键在源表获取需要修复的行数据. %v. value: %v %v", table.GetSelSourceRowSqlTpl, primaryValues, err)
 	}
 
 	rs, err := helper.GetRow(rows)
 	if err != nil {
-		return nil, fmt.Errorf("%v: 查询获取一行主键数据失败, 通过主键在源表获取需要修复的行数据. %v. value: %v %v", common.CurrLine(), table.GetSelSourceRowSqlTpl, primaryValues, err)
+		return nil, fmt.Errorf("查询获取一行主键数据失败, 通过主键在源表获取需要修复的行数据. %v. value: %v %v", table.GetSelSourceRowSqlTpl, primaryValues, err)
 	}
 
 	return rs, nil
@@ -263,7 +263,7 @@ func ReplaceTargetRow(host string, port int, sourceRow []interface{}, table *mat
 	// 获取实例
 	instance, ok := gdbc.GetDynamicDBByHostPort(host, int64(port))
 	if !ok {
-		return fmt.Errorf("%v: 缓存中不存在该实例(%v:%v). 通过主键 repalce into 目标行", common.CurrLine(), host, port)
+		return fmt.Errorf("缓存中不存在该实例(%v:%v). 通过主键 repalce into 目标行", host, port)
 	}
 
 	replaceIntoSql := table.GetRepPerBatchSqlTpl_V2([][]interface{}{sourceRow})
@@ -285,14 +285,14 @@ func diffRecord2PrimaryRangeValue(record model.DataChecksum, table *matemap.Tabl
 
 	minValue, err := common.Json2MapBySqlType(record.MinIDValue.String, table.FindSourcePKColumnTypeMap())
 	if err != nil {
-		return nil, fmt.Errorf("%v: 失败. 将最小ID值 JSON -> Map. 生成checksum需要进行fix的记录. %v.%v. min: %v, max: %v. %v",
-			common.CurrLine(), record.SourceSchema.String, record.SourceTable.String, record.MinIDValue.String, record.MinIDValue.String, err)
+		return nil, fmt.Errorf("失败. 将最小ID值 JSON -> Map. 生成checksum需要进行fix的记录. %v.%v. min: %v, max: %v. %v",
+			record.SourceSchema.String, record.SourceTable.String, record.MinIDValue.String, record.MinIDValue.String, err)
 	}
 
 	maxValue, err := common.Json2MapBySqlType(record.MaxIDValue.String, table.FindSourcePKColumnTypeMap())
 	if err != nil {
-		return nil, fmt.Errorf("%v: 失败. 将最大ID值 JSON -> Map. 生成checksum需要进行fix的记录. %v.%v. min: %v, max: %v. %v",
-			common.CurrLine(), record.SourceSchema.String, record.SourceTable.String, record.MinIDValue.String, record.MinIDValue.String, err)
+		return nil, fmt.Errorf("失败. 将最大ID值 JSON -> Map. 生成checksum需要进行fix的记录. %v.%v. min: %v, max: %v. %v",
+			record.SourceSchema.String, record.SourceTable.String, record.MinIDValue.String, record.MinIDValue.String, err)
 	}
 	primaryRangeValue := matemap.NewPrimaryRangeValue("-1", record.SourceSchema.String, record.SourceTable.String, minValue, maxValue)
 
@@ -309,27 +309,4 @@ func TagDiffRecordFixed(_id int64) int {
 	affected := dataChecksumDao.FixCompletedByID(_id)
 
 	return affected
-}
-
-// 还需要修复的记录数自增
-func (this *Checksum) IncrNeedFixRecordCounter() {
-	this.NeedFixRecordCounterRWMutex.Lock()
-	this.NeedFixRecordCounter++
-	this.NeedFixRecordCounterRWMutex.Unlock()
-}
-
-// 还需要修复的记录数自减
-func (this *Checksum) DecrNeedFixRecordCounter() {
-	this.NeedFixRecordCounterRWMutex.Lock()
-	this.NeedFixRecordCounter--
-	this.NeedFixRecordCounterRWMutex.Unlock()
-}
-
-// 获取还需要修复的记录数
-func (this *Checksum) GetNeedFixRecordCounter() int {
-	this.NeedFixRecordCounterRWMutex.RLock()
-	counter := this.NeedFixRecordCounter
-	this.NeedFixRecordCounterRWMutex.RUnlock()
-
-	return counter
 }

@@ -5,9 +5,8 @@ import (
 	"github.com/daiguadaidai/go-d-bus/common"
 	"github.com/daiguadaidai/go-d-bus/dao"
 	"github.com/daiguadaidai/go-d-bus/gdbc"
+	"github.com/daiguadaidai/go-d-bus/logger"
 	"github.com/daiguadaidai/go-d-bus/matemap"
-	"github.com/outbrain/golib/log"
-	"syscall"
 	"time"
 )
 
@@ -28,35 +27,26 @@ func (this *ApplyBinlog) WaitingApplyEventAndReplaceTableMap(_schemaName string,
 	for {
 		// 需要应用的事件为0后就可以开始重新生成该表的元数据信息
 		if this.NeedApplyEventCount.Load() == 0 {
-			log.Infof("%v: 队列中的剩余binlog event已经消费完成. 开始生成新的元数据, %v.%v",
-				common.CurrLine(), _schemaName, _tableName)
+			logger.M.Infof("队列中的剩余binlog event已经消费完成. 开始生成新的元数据, %v.%v", _schemaName, _tableName)
 
 			migrationTable, err := matemap.NewTable(this.ConfigMap, _schemaName, _tableName)
 			if err != nil {
-				log.Errorf("%v: 失败. 重新生成需要迁移的表元数据信息. "+
-					"%v.%v 退出迁移 %v",
-					common.CurrLine(), _schemaName, _tableName, err)
-				syscall.Exit(1)
+				logger.M.Fatalf("失败. 重新生成需要迁移的表元数据信息. %v.%v 退出迁移 %v", _schemaName, _tableName, err)
+				// syscall.Exit(1)
 			}
 			if migrationTable == nil {
-				log.Errorf("%v: 失败. 无法重新生成表元数据信息. "+
-					"%v.%v 退出迁移 %v",
-					common.CurrLine(), _schemaName, _tableName, err)
-				syscall.Exit(1)
+				logger.M.Fatalf("失败. 无法重新生成表元数据信息. %v.%v 退出迁移 %v", _schemaName, _tableName, err)
+				// syscall.Exit(1)
 			}
 
 			// 设置新生成的需要迁移的表元数据信息
-			matemap.SetMigrationTableMap(common.FormatTableName(_schemaName, _tableName, ""),
-				migrationTable)
+			matemap.SetMigrationTableMap(common.FormatTableName(_schemaName, _tableName, ""), migrationTable)
 
-			log.Infof("%v: 成功生成表的元数据, %v.%v",
-				common.CurrLine(), _schemaName, _tableName)
+			logger.M.Infof("成功生成表的元数据, %v.%v", _schemaName, _tableName)
 
 			return
 		} else {
-			log.Warningf("%v: 检测到还有binlog event没有消费完成. 等待消费, "+
-				"再进行生成表的元数据. %v.%v",
-				common.CurrLine(), _schemaName, _tableName)
+			logger.M.Warn("检测到还有binlog event没有消费完成. 等待消费, 再进行生成表的元数据. %v.%v", _schemaName, _tableName)
 		}
 
 		time.Sleep(time.Second)
@@ -121,7 +111,7 @@ func GetStopLogFilePos(_taskUUID string) (string, int) {
 	columnStr := "stop_log_file, stop_log_pos"
 	source, err := sourceDao.GetByTaskUUID(_taskUUID, columnStr)
 	if err != nil {
-		log.Errorf("%v: 错误. 获取停止位点信息失败. 将设置为没有停止位点. %v", common.CurrLine(), err)
+		logger.M.Errorf("错误. 获取停止位点信息失败. 将设置为没有停止位点. %v", err)
 		return stopLogFile, stopLogPos
 	}
 
@@ -143,7 +133,7 @@ Params:
 func ShowMasterStatus(host string, port int) (string, int, error) {
 	instance, ok := gdbc.GetDynamicDBByHostPort(host, int64(port))
 	if !ok {
-		return "", -1, fmt.Errorf("%v: 缓存中不存在该实例(%v:%v). 执行 show master status 获取数据库位点信息", common.CurrLine(), host, port)
+		return "", -1, fmt.Errorf("缓存中不存在该实例(%v:%v). 执行 show master status 获取数据库位点信息", host, port)
 	}
 
 	sql := "/* go-d-bus */ SHOW MASTER STATUS"
@@ -153,7 +143,7 @@ func ShowMasterStatus(host string, port int) (string, int, error) {
 	var logPos int
 	var ignore interface{}
 	if err := row.Scan(&logFile, &logPos, &ignore, &ignore, &ignore); err != nil {
-		return "", -1, fmt.Errorf("%v: scan 字段出错, 执行 show master status 获取数据库位点信息. %v", common.CurrLine(), err)
+		return "", -1, fmt.Errorf("scan 字段出错, 执行 show master status 获取数据库位点信息. %v", err)
 	}
 
 	return logFile, logPos, nil

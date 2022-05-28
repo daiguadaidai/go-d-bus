@@ -1,10 +1,10 @@
 package service
 
 import (
-	"github.com/daiguadaidai/go-d-bus/common"
 	"github.com/daiguadaidai/go-d-bus/config"
 	"github.com/daiguadaidai/go-d-bus/dao"
 	"github.com/daiguadaidai/go-d-bus/gdbc"
+	"github.com/daiguadaidai/go-d-bus/logger"
 	"github.com/daiguadaidai/go-d-bus/matemap"
 	"github.com/daiguadaidai/go-d-bus/model"
 	"github.com/daiguadaidai/go-d-bus/parser"
@@ -12,7 +12,6 @@ import (
 	mysqlcs "github.com/daiguadaidai/go-d-bus/service/mysqlchecksum"
 	mysqlrc "github.com/daiguadaidai/go-d-bus/service/mysqlrowcopy"
 	"github.com/daiguadaidai/go-d-bus/setting"
-	"github.com/outbrain/golib/log"
 	"sync"
 )
 
@@ -20,41 +19,41 @@ func StartMigration(_parser *parser.RunParser) {
 	// 获取配置映射信息
 	configMap, err := config.NewConfigMap(_parser.TaskUUID)
 	if err != nil {
-		log.Fatalf("%v", err)
+		logger.M.Fatal(err)
 	}
 
 	// 获取随机其中一个schemaMap
 	randSchemaMap := configMap.GetRandSchemaMap()
 	if randSchemaMap == nil {
-		log.Fatalf("随机获取一个数据库映射信息失败, 没有数据库映射信息")
+		logger.M.Fatal("随机获取一个数据库映射信息失败, 没有数据库映射信息")
 	}
 
 	// 链接原数据数据库
 	if err := InitSourceDB(configMap.Source, randSchemaMap.Source.String); err != nil {
-		log.Fatalf("初始化(源)数据库链接出错, %v", err)
+		logger.M.Fatalf("初始化(源)数据库链接出错, %v", err)
 	}
 
 	// 初始化目标连接数
 	if err := InitTargetDB(configMap.Target, randSchemaMap.Target.String); err != nil {
-		log.Fatalf("初始化(目标)数据库链接出错, %v", err)
+		logger.M.Fatalf("初始化(目标)数据库链接出错, %v", err)
 	}
 
 	// 如果没有设置binglog开始位点则show master status 找
 	if _parser.StartLogFile == "" || _parser.StartLogPos < 0 {
 		if err := _parser.SetStartBinlogInfoByHostAndPort(configMap.Source.Host.String, int(configMap.Source.Port.Int64)); err != nil {
-			log.Fatalf("实时获取主库 位点信息出错. %v, 退出迁移", err.Error())
+			logger.M.Fatalf("实时获取主库 位点信息出错. %v, 退出迁移", err.Error())
 		}
 	}
 
 	// 保存binglog开始位点
 	if err := new(dao.SourceDao).UpdateStartLogPosInfo(_parser.TaskUUID, _parser.StartLogFile, _parser.StartLogPos); err != nil {
-		log.Fatalf("迁移启动保存位点信息出错 %v", err)
+		logger.M.Fatalf("迁移启动保存位点信息出错 %v", err)
 	}
 
 	// 初始化需要迁移的表
 	err = matemap.InitMigrationTableMap(configMap)
 	if err != nil {
-		log.Fatalf("%v", err)
+		logger.M.Fatal(err)
 	}
 	// 打印需要迁移的表信息
 	matemap.ShowAllMigrationTableNames()
@@ -73,27 +72,27 @@ func StartMigration(_parser *parser.RunParser) {
 		wg.Add(1)
 		go StartChecksum(_parser, configMap, wg, rowCopy2CheksumChan, notifySecondChecksum)
 	} else {
-		log.Warningf("%v: 没有指定checksum, 本次迁移将不会进行数据校验", common.CurrLine())
+		logger.M.Warn("没有指定checksum, 本次迁移将不会进行数据校验")
 	}
 
 	// 开始进行 row copy
 	if _parser.EnableRowCopy {
 		err = StartRowCopy(_parser, configMap, rowCopy2CheksumChan, notifySecondChecksum)
 		if err != nil {
-			log.Fatalf("%v: %v", common.CurrLine(), err)
+			logger.M.Fatal(err)
 		}
 	} else {
-		log.Warningf("%v: 没有指定row copy, 本次迁移将不会进行表拷贝操作", common.CurrLine())
+		logger.M.Warn("没有指定row copy, 本次迁移将不会进行表拷贝操作")
 	}
 
 	// 开始应用binlog
 	if _parser.EnableApplyBinlog {
 		err = StartApplyBinlog(_parser, configMap)
 		if err != nil {
-			log.Fatalf("%v", err)
+			logger.M.Fatal(err)
 		}
 	} else {
-		log.Warningf("%v: 没有指定应用binlog, 本次迁移将不会进行binlog的应用", common.CurrLine())
+		logger.M.Warn("没有指定应用binlog, 本次迁移将不会进行binlog的应用")
 	}
 
 	wg.Wait()

@@ -3,7 +3,6 @@ package common
 import (
 	"database/sql"
 	"fmt"
-	"github.com/juju/errors"
 	"strconv"
 	"strings"
 	"time"
@@ -294,8 +293,7 @@ func Row2Map(_row *sql.Row, _columnNames []string, _columnTypes []int) (map[stri
 
 	err := _row.Scan(scanArgs...)
 	if err != nil {
-		errMSG := fmt.Sprintf("%v: scan 字段数据错误 %v", CurrLine(), err)
-		return nil, errors.New(errMSG)
+		return nil, fmt.Errorf("scan 字段数据错误 %v", err)
 	}
 
 	// 开始生成字段数据
@@ -304,9 +302,7 @@ func Row2Map(_row *sql.Row, _columnNames []string, _columnTypes []int) (map[stri
 	for i, value := range values {
 		columnData, err := GetColumnData(value, _columnTypes[i])
 		if err != nil {
-			errMSG := fmt.Sprintf("%v: 转化字段数据出错 column Name: %v. column type: %v. %v",
-				CurrLine(), _columnNames[i], _columnTypes[i], err)
-			return nil, errors.New(errMSG)
+			return nil, fmt.Errorf("转化字段数据出错 column Name: %v. column type: %v. %v", _columnNames[i], _columnTypes[i], err)
 		}
 		rowMap[_columnNames[i]] = columnData
 	}
@@ -376,8 +372,7 @@ func String2GoValueBySqlType(_value string, _sqlType int) (interface{}, error) {
 		return _value, nil
 	}
 
-	errMSG := fmt.Sprintf("%v: 失败. 转化数据库字段信息出错遇到未知类型", CurrLine())
-	return -1, errors.New(errMSG)
+	return -1, fmt.Errorf("失败. 转化数据库字段信息出错遇到未知类型")
 }
 
 /* 将sql类型转化成Golang类型
@@ -404,8 +399,7 @@ func SqlType2GoType(_sqlType int) (int, error) {
 		return GO_TYPE_STRING, nil
 	}
 
-	errMSG := fmt.Sprintf("%v: 失败. 转化数据库字段信息出错遇到未知类型", CurrLine())
-	return -1, errors.New(errMSG)
+	return -1, fmt.Errorf("失败. 转化数据库字段信息出错遇到未知类型")
 }
 
 // 将row转化为相关类型interface

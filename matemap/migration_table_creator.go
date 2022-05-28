@@ -6,8 +6,7 @@ import (
 	"github.com/daiguadaidai/go-d-bus/common"
 	"github.com/daiguadaidai/go-d-bus/config"
 	"github.com/daiguadaidai/go-d-bus/gdbc"
-	"github.com/juju/errors"
-	"github.com/outbrain/golib/log"
+	"github.com/daiguadaidai/go-d-bus/logger"
 	"strings"
 	"sync"
 )
@@ -37,9 +36,7 @@ Params:
 func GetMigrationTable(_key string) (*Table, error) {
 	tableInterface, ok := migrationTableMap.Load(_key)
 	if !ok {
-		errMsg := fmt.Sprintf("%v: 在迁移表Map中没有获取到需要迁移的表. table: %v",
-			common.CurrLine(), _key)
-		return nil, errors.New(errMsg)
+		return nil, fmt.Errorf("在迁移表Map中没有获取到需要迁移的表. table: %v", _key)
 	}
 
 	table := tableInterface.(interface{}).(*Table)
@@ -60,30 +57,23 @@ func SetMigrationTableMap(_key string, _table *Table) {
 Params:
     _configMap: 需要迁移的表的映射配置信息
 */
-func InitMigrationTableMap(_configMap *config.ConfigMap) error {
+func InitMigrationTableMap(configMap *config.ConfigMap) error {
 
-	for key, tableMap := range _configMap.TableMapMap {
-		migrationTable, err := NewTable(_configMap, tableMap.Schema.String, tableMap.Source.String)
+	for key, tableMap := range configMap.TableMapMap {
+		migrationTable, err := NewTable(configMap, tableMap.Schema.String, tableMap.Source.String)
 		if err != nil {
 			return err
 		}
 		if migrationTable == nil {
-			log.Warningf(
-				"%v: 失败. 在实例中没有查找到表, 将忽略该表的迁移. %v.%v. %v:%v",
-				common.CurrLine(),
-				tableMap.Schema.String,
-				tableMap.Source.String,
-				_configMap.Source.Host.String,
-				_configMap.Source.Port.Int64,
-			)
+			logger.M.Warnf("失败. 在实例中没有查找到表, 将忽略该表的迁移. %v.%v. %v:%v",
+				tableMap.Schema.String, tableMap.Source.String, configMap.Source.Host.String, configMap.Source.Port.Int64)
 			continue
 		}
 
 		SetMigrationTableMap(key, migrationTable)
 
-		log.Infof("%v: 成功. 初始化迁移表元信息 %v.%v-> %v.%v", common.CurrLine(),
-			migrationTable.SourceSchema, migrationTable.SourceName, migrationTable.TargetSchema,
-			migrationTable.TargetName)
+		logger.M.Infof("成功. 初始化迁移表元信息 %v.%v-> %v.%v",
+			migrationTable.SourceSchema, migrationTable.SourceName, migrationTable.TargetSchema, migrationTable.TargetName)
 	}
 
 	return nil
@@ -110,78 +100,65 @@ func NewTable(_configMap *config.ConfigMap, _schemaName string, _tableName strin
 	table.TargetName = _configMap.TableMapMap[tableKey].Target.String
 
 	// 初始化 源 column
-	sourceColumns, err := GetSourceTableColumns(
-		table.SourceSchema,
-		table.SourceName,
-		_configMap.Source.Host.String,
-		int(_configMap.Source.Port.Int64),
-	)
+	sourceColumns, err := GetSourceTableColumns(table.SourceSchema, table.SourceName, _configMap.Source.Host.String, int(_configMap.Source.Port.Int64))
 	if err != nil {
 		return nil, err
 	}
 	if len(sourceColumns) == 0 || sourceColumns == nil {
-		log.Warningf("%v 失败. 没有查寻到该表的字段信息, %v.%v, %v:%v",
-			common.CurrLine(),
-			table.SourceSchema,
-			table.SourceName,
-			_configMap.Source.Host.String,
-			int(_configMap.Source.Port.Int64))
+		logger.M.Warnf("失败. 没有查寻到该表的字段信息, %v.%v, %v:%v",
+			table.SourceSchema, table.SourceName, _configMap.Source.Host.String, int(_configMap.Source.Port.Int64))
 		return nil, nil
 	}
 	table.SourceColumns = sourceColumns
-	log.Infof("%v: 成功. 获取所有的(源)字段, %v.%v", common.CurrLine(), table.SourceSchema, table.SourceName)
+	logger.M.Infof("成功. 获取所有的(源)字段, %v.%v", table.SourceSchema, table.SourceName)
 
 	// 通过 源 columns 生成目标 columns, 只要 sourceColumns 有值, targetColumns 一定有值
 	table.TargetColumns = GetTargetTableColumnBySourceColumns(
 		_configMap, table.SourceSchema, table.SourceName, sourceColumns)
-	log.Infof("%v: 成功. 生成(目标)字段, 通过源字段, %v.%v", common.CurrLine(), table.SourceSchema, table.SourceName)
+	logger.M.Infof("成功. 生成(目标)字段, 通过源字段, %v.%v", table.SourceSchema, table.SourceName)
 
 	// 初始化列的名相关映射信息
 	err = table.InitColumnMapInfo()
 	if err != nil {
 		return nil, err
 	}
-	log.Infof("%v: 成功. 生成 源和目标 字段相关映射信息. %v.%v <-> %v.%v",
-		common.CurrLine(), table.SourceSchema, table.SourceName, table.TargetSchema, table.TargetName)
+	logger.M.Infof("成功. 生成 源和目标 字段相关映射信息. %v.%v <-> %v.%v",
+		table.SourceSchema, table.SourceName, table.TargetSchema, table.TargetName)
 
 	// 添加不进行迁移的列
 	ignoreColumnNames := _configMap.GetIgnoreColumnsBySchemaAndTable(table.SourceSchema, table.SourceName)
 	table.SetSourceIgnoreColumns(ignoreColumnNames)
-	log.Infof("%v: 成功. 设置表不需要迁移的字段. %v.%v: %v", common.CurrLine(),
-		table.SourceSchema, table.SourceName, ignoreColumnNames)
+	logger.M.Infof("成功. 设置表不需要迁移的字段. %v.%v: %v", table.SourceSchema, table.SourceName, ignoreColumnNames)
 
 	// 生成 最终需要使用到的 列, 一个表有多个列, 但是同步时可能, 只需要同步其中几个列就好了.
 	table.InitSourceUsefulColumns()
-	log.Infof("%v: 成功. 生成需要迁移的字段. %v.%v", common.CurrLine(), table.SourceSchema,
-		table.SourceName)
+	logger.M.Infof("成功. 生成需要迁移的字段. %v.%v", table.SourceSchema, table.SourceName)
 
 	sourcePkColumnNames, err := FindSourcePKColumnNames(_configMap, table)
 	if err != nil {
 		return nil, err
 	}
-	log.Infof("%v: 成功. 获得可用的主键. %v.%v %v", common.CurrLine(), table.SourceSchema,
-		table.SourceName, sourcePkColumnNames)
+	logger.M.Infof("成功. 获得可用的主键. %v.%v %v", table.SourceSchema, table.SourceName, sourcePkColumnNames)
 
 	// 通过可用的 (主键/唯一键), 初始化该表迁移时需要的主键
 	table.InitSourcePKColumns(sourcePkColumnNames)
-	log.Infof("%v: 成功. 初始化源表的主键. %v.%v", common.CurrLine(), table.SourceSchema,
-		table.SourceName)
+	logger.M.Infof("成功. 初始化源表的主键. %v.%v", table.SourceSchema, table.SourceName)
 	// 通过源主键列初始化目标主键列
 	table.InitTargetPKColumnsFromSource()
-	log.Infof("%v: 成功. 初始化目标表的主键. %v.%v <-> %v.%v", common.CurrLine(),
-		table.SourceSchema, table.SourceName, table.TargetSchema, table.TargetName)
+	logger.M.Infof("成功. 初始化目标表的主键. %v.%v <-> %v.%v", table.SourceSchema, table.SourceName, table.TargetSchema, table.TargetName)
 
 	// 获取表所有的唯一键字段, 包括主键的
-	distinctUKColumnNames, err := FindSourceDistinctUKColumnNames(_configMap.Source.Host.String,
-		int(_configMap.Source.Port.Int64), _schemaName, _tableName)
+	distinctUKColumnNames, err := FindSourceDistinctUKColumnNames(_configMap.Source.Host.String, int(_configMap.Source.Port.Int64), _schemaName, _tableName)
 	if err != nil {
 		return nil, err
 	}
+
 	// 初始化源表所有唯一键字段, 通过字段名
 	err = table.InitSourceAllUKColumnsByNames(distinctUKColumnNames)
 	if err != nil {
 		return nil, err
 	}
+
 	// 初始化目标表的所有唯一键字段, 通过源字段名
 	err = table.InitTargetAllUKColumnsBySourceUKNames(distinctUKColumnNames)
 	if err != nil {
@@ -193,6 +170,7 @@ func NewTable(_configMap *config.ConfigMap, _schemaName string, _tableName strin
 	if err != nil {
 		return nil, err
 	}
+
 	table.InitTargetCreateTableSql(targetCreateTableSql)
 
 	// 初始化所有的该表相关sql语句模板
@@ -225,18 +203,18 @@ func GetSourceTableColumns(schemaName string, tableName string, host string, por
             AND TABLE_NAME = ?
         ORDER BY ORDINAL_POSITION ASC    
     `
-	log.Infof("%v: 获取表 %v.%v 所有的字段", common.CurrLine(), schemaName, tableName)
+	logger.M.Infof("获取表 %v.%v 所有的字段", schemaName, tableName)
 
 	// 获取数据库实例链接
 	instance, ok := gdbc.GetDynamicDBByHostPort(host, int64(port))
 	if !ok {
-		return nil, fmt.Errorf("%v: 缓存中不存在该实例(%v:%v). 获取表的所有列. %v.%v ", common.CurrLine(), host, port, schemaName, tableName)
+		return nil, fmt.Errorf("缓存中不存在该实例(%v:%v). 获取表的所有列. %v.%v ", host, port, schemaName, tableName)
 	}
 
 	// 查询数据库
 	rows, err := instance.Query(selectSql, schemaName, tableName)
 	if err != nil {
-		return nil, fmt.Errorf("%v: 失败. 获取表所有字段. %v.%v %v:%v. %v: %v", common.CurrLine(), schemaName, tableName, host, port, err, selectSql)
+		return nil, fmt.Errorf("失败. 获取表所有字段. %v.%v %v:%v. %v: %v", schemaName, tableName, host, port, err, selectSql)
 	}
 	defer rows.Close()
 
@@ -250,13 +228,13 @@ func GetSourceTableColumns(schemaName string, tableName string, host string, por
 		var extra sql.NullString
 
 		if err := rows.Scan(&tableSchema, &tableName, &columnName, &ordinalPosition, &columnType, &extra); err != nil {
-			return nil, fmt.Errorf("%v: scan表字段出错. %v.%v. %v", common.CurrLine(), schemaName, tableName, err)
+			return nil, fmt.Errorf("scan表字段出错. %v.%v. %v", schemaName, tableName, err)
 		}
 
 		column := CreateColumn(columnName.String, columnType.String, extra.String, int(ordinalPosition.Int64))
 
 		columns = append(columns, column)
-		log.Infof("%v: 成功. 添加表字段 %v.%v.%v", common.CurrLine(), schemaName, tableName, columnName.String)
+		logger.M.Infof("成功. 添加表字段 %v.%v.%v", schemaName, tableName, columnName.String)
 	}
 
 	return columns, nil
@@ -284,14 +262,8 @@ func GetTargetTableColumnBySourceColumns(_configMap *config.ConfigMap, _schemaNa
 		columnKey := config.GetColumnKey(_schemaName, _tableName, column.Name)
 		if columnMap, ok := _configMap.ColumnMapMap[columnKey]; ok {
 			targetColumns[i].Name = columnMap.Target.String
-			log.Infof(
-				"%v: 成功. 发现(源)和(目标)字段有映射信息, 修改目标字段名. %v.%v.%v -> %v.%v.%v",
-				common.CurrLine(),
-				_schemaName, _tableName, column.Name,
-				_configMap.SchemaMapMap[config.GetSchemaKey(_schemaName)].Target.String,
-				_configMap.TableMapMap[config.GetTableKey(_schemaName, _tableName)].Target.String,
-				columnMap.Target.String,
-			)
+			logger.M.Infof("成功. 发现(源)和(目标)字段有映射信息, 修改目标字段名. %v.%v.%v -> %v.%v.%v",
+				_schemaName, _tableName, column.Name, _configMap.SchemaMapMap[config.GetSchemaKey(_schemaName)].Target.String, _configMap.TableMapMap[config.GetTableKey(_schemaName, _tableName)].Target.String, columnMap.Target.String)
 		}
 	}
 
@@ -311,8 +283,7 @@ Params:
 func FindSourcePKColumnNames(_configMap *config.ConfigMap, _table *Table) ([]string, error) {
 
 	// 获取主键
-	pkColumnNames, err := FindPKColumnNames(_configMap.Source.Host.String,
-		int(_configMap.Source.Port.Int64), _table.SourceSchema, _table.SourceName)
+	pkColumnNames, err := FindPKColumnNames(_configMap.Source.Host.String, int(_configMap.Source.Port.Int64), _table.SourceSchema, _table.SourceName)
 	if err != nil {
 		return nil, err
 	}
@@ -320,8 +291,7 @@ func FindSourcePKColumnNames(_configMap *config.ConfigMap, _table *Table) ([]str
 	// 判断主键列是有在不迁移打字段中, 如果主键列是否在需要迁移打列中
 	// 否则继续查找 唯一键
 	if len(pkColumnNames) >= 0 {
-		log.Infof("%v: 成功. 获取到所有的主键列 %v.%v %v", common.CurrLine(),
-			_table.SourceSchema, _table.SourceName, pkColumnNames)
+		logger.M.Infof("成功. 获取到所有的主键列 %v.%v %v", _table.SourceSchema, _table.SourceName, pkColumnNames)
 		pkInUsefulColumn := true
 		// 判断所有的主键列是否都在需要迁移打列中
 		for _, pkColumnName := range pkColumnNames {
@@ -329,14 +299,12 @@ func FindSourcePKColumnNames(_configMap *config.ConfigMap, _table *Table) ([]str
 			if columnIndex, ok := _table.SourceColumnIndexMap[pkColumnName]; ok {
 				if !common.HasElem(_table.SourceUsefulColumns, columnIndex) {
 					pkInUsefulColumn = false
-					log.Warningf("%v: 失败. 检测到主键列没有在需要迁移的列中. %v.%v.%v",
-						common.CurrLine(), _table.SourceSchema, _table.SourceName, pkColumnName)
+					logger.M.Warnf("失败. 检测到主键列没有在需要迁移的列中. %v.%v.%v", _table.SourceSchema, _table.SourceName, pkColumnName)
 					break
 				}
 			} else {
 				pkInUsefulColumn = false
-				log.Warningf("%v: 失败. 检测到主键列没有在该表中. %v.%v.%v",
-					common.CurrLine(), _table.SourceSchema, _table.SourceName, pkColumnName)
+				logger.M.Warnf("失败. 检测到主键列没有在该表中. %v.%v.%v", _table.SourceSchema, _table.SourceName, pkColumnName)
 				break
 			}
 		}
@@ -346,29 +314,22 @@ func FindSourcePKColumnNames(_configMap *config.ConfigMap, _table *Table) ([]str
 			return pkColumnNames, nil
 		}
 	}
-	log.Warningf("%v: 失败, 获取的主键列中有不需要迁移打列, 将获取唯一键来代替主键. %v.%v",
-		common.CurrLine(), _table.SourceSchema, _table.SourceName)
+	logger.M.Warnf("失败, 获取的主键列中有不需要迁移打列, 将获取唯一键来代替主键. %v.%v", _table.SourceSchema, _table.SourceName)
 
 	// 获取唯一键名称. 注意: 该名称不是列名.
-	uniqueNames, err := FindUniqueNames(_configMap.Source.Host.String,
-		int(_configMap.Source.Port.Int64), _table.SourceSchema, _table.SourceName)
+	uniqueNames, err := FindUniqueNames(_configMap.Source.Host.String, int(_configMap.Source.Port.Int64), _table.SourceSchema, _table.SourceName)
 	if err != nil {
 		return nil, err
 	}
 
 	// 该表没有唯一键则返回错误, 因为迁移必须要有唯一, 或主键
 	if len(uniqueNames) == 0 || uniqueNames == nil {
-		errMSG := fmt.Sprintf("%v: 失败. 该表没有主键和可以用的唯一键. %v.%v %v:%v",
-			common.CurrLine(), _table.SourceSchema, _table.SourceName,
-			_configMap.Source.Host.String, _configMap.Source.Port.Int64)
-		return nil, errors.New(errMSG)
+		return nil, fmt.Errorf("失败. 该表没有主键和可以用的唯一键. %v.%v %v:%v", _table.SourceSchema, _table.SourceName, _configMap.Source.Host.String, _configMap.Source.Port.Int64)
 	}
 
 	// 获取能用的唯一键列名称, 并且可用的唯一键就是主键
 	for _, uniqueName := range uniqueNames {
-		uniqueColumnNames, err := FindUniqueColumnNames(_configMap.Source.Host.String,
-			int(_configMap.Source.Port.Int64), _table.SourceSchema, _table.SourceName,
-			uniqueName)
+		uniqueColumnNames, err := FindUniqueColumnNames(_configMap.Source.Host.String, int(_configMap.Source.Port.Int64), _table.SourceSchema, _table.SourceName, uniqueName)
 		if err != nil {
 			return nil, err
 		}
@@ -380,14 +341,12 @@ func FindSourcePKColumnNames(_configMap *config.ConfigMap, _table *Table) ([]str
 			if columnIndex, ok := _table.SourceColumnIndexMap[uniqueColumnName]; ok {
 				if !common.HasElem(_table.SourceUsefulColumns, columnIndex) {
 					uniqueInUsefulColumn = false
-					log.Warningf("%v: 失败. 检测到主键列没有在需要迁移的列中. 唯一键名称: %v. %v.%v.%v",
-						common.CurrLine(), uniqueName, _table.SourceSchema, _table.SourceName, uniqueColumnName)
+					logger.M.Warnf("失败. 检测到主键列没有在需要迁移的列中. 唯一键名称: %v. %v.%v.%v", uniqueName, _table.SourceSchema, _table.SourceName, uniqueColumnName)
 					break
 				}
 			} else {
 				uniqueInUsefulColumn = false
-				log.Warningf("%v: 失败. 通过唯一键列名, 没有匹配到表相关的列. 唯一键名称: %v. %v.%v.%v",
-					common.CurrLine(), uniqueName, _table.SourceSchema, _table.SourceName, uniqueColumnName)
+				logger.M.Warnf("失败. 通过唯一键列名, 没有匹配到表相关的列. 唯一键名称: %v. %v.%v.%v", uniqueName, _table.SourceSchema, _table.SourceName, uniqueColumnName)
 				break
 			}
 
@@ -399,10 +358,7 @@ func FindSourcePKColumnNames(_configMap *config.ConfigMap, _table *Table) ([]str
 		}
 	}
 
-	errMSG := fmt.Sprintf("%v: 失败. 该表没有主键和可以用的唯一键. %v.%v %v:%v",
-		common.CurrLine(), _table.SourceSchema, _table.SourceName,
-		_configMap.Source.Host.String, _configMap.Source.Port.Int64)
-	return nil, errors.New(errMSG)
+	return nil, fmt.Errorf("失败. 该表没有主键和可以用的唯一键. %v.%v %v:%v", _table.SourceSchema, _table.SourceName, _configMap.Source.Host.String, _configMap.Source.Port.Int64)
 }
 
 /* 获取指定表的主键名称
@@ -418,7 +374,7 @@ func FindPKColumnNames(host string, port int, schemaName string, tableName strin
 
 	instance, ok := gdbc.GetDynamicDBByHostPort(host, int64(port))
 	if !ok {
-		return nil, fmt.Errorf("%v: 缓存中不存在该实例(%v:%v). 获取表主键. %v.%v", common.CurrLine(), host, port, schemaName, tableName)
+		return nil, fmt.Errorf("缓存中不存在该实例(%v:%v). 获取表主键. %v.%v", host, port, schemaName, tableName)
 	}
 
 	selectSql := `
@@ -437,7 +393,7 @@ func FindPKColumnNames(host string, port int, schemaName string, tableName strin
 	// 查询数据库
 	rows, err := instance.Query(selectSql, schemaName, tableName)
 	if err != nil {
-		return nil, fmt.Errorf(" %v: 失败. 获取表主键列名. %v.%v %v:%v. %v: %v", common.CurrLine(), schemaName, tableName, host, port, err, selectSql)
+		return nil, fmt.Errorf("失败. 获取表主键列名. %v.%v %v:%v. %v: %v", schemaName, tableName, host, port, err, selectSql)
 	}
 	defer rows.Close()
 
@@ -446,7 +402,7 @@ func FindPKColumnNames(host string, port int, schemaName string, tableName strin
 		var columnName sql.NullString
 
 		if err := rows.Scan(&columnName); err != nil {
-			return nil, fmt.Errorf("%v: scan 获取指定表的主键名称. %v.%v. %v", common.CurrLine(), schemaName, tableName, err)
+			return nil, fmt.Errorf("scan 获取指定表的主键名称. %v.%v. %v", schemaName, tableName, err)
 		}
 
 		pkColumnNames = append(pkColumnNames, columnName.String)
@@ -468,7 +424,7 @@ func FindUniqueNames(host string, port int, schemaName string, tableName string)
 
 	instance, ok := gdbc.GetDynamicDBByHostPort(host, int64(port))
 	if !ok {
-		return nil, fmt.Errorf("%v: 缓存中不存在该实例(%v:%v). 获取表唯一键名称. %v.%v", common.CurrLine(), host, port, schemaName, tableName)
+		return nil, fmt.Errorf("缓存中不存在该实例(%v:%v). 获取表唯一键名称. %v.%v", host, port, schemaName, tableName)
 	}
 
 	selectSql := `
@@ -483,7 +439,7 @@ func FindUniqueNames(host string, port int, schemaName string, tableName string)
 	// 查询数据库
 	rows, err := instance.Query(selectSql, schemaName, tableName)
 	if err != nil {
-		return nil, fmt.Errorf(" %v: 失败. 获取表主键列名. %v.%v %v:%v. %v: %v", common.CurrLine(), schemaName, tableName, host, port, err, selectSql)
+		return nil, fmt.Errorf("失败. 获取表主键列名. %v.%v %v:%v. %v: %v", schemaName, tableName, host, port, err, selectSql)
 	}
 	defer rows.Close()
 
@@ -492,7 +448,7 @@ func FindUniqueNames(host string, port int, schemaName string, tableName string)
 		var uniqueName sql.NullString
 
 		if err := rows.Scan(&uniqueName); err != nil {
-			return nil, fmt.Errorf("%v: scan 获取指定表的所有唯一键名称. %v.%v. %v", common.CurrLine(), schemaName, tableName, err)
+			return nil, fmt.Errorf("scan 获取指定表的所有唯一键名称. %v.%v. %v", schemaName, tableName, err)
 		}
 
 		uniqueNames = append(uniqueNames, uniqueName.String)
@@ -516,7 +472,7 @@ func FindUniqueColumnNames(host string, port int, schemaName string, tableName s
 
 	instance, ok := gdbc.GetDynamicDBByHostPort(host, int64(port))
 	if !ok {
-		return nil, fmt.Errorf("%v: 缓存中不存在该实例(%v:%v). 获取表唯一键列名. 唯一键名称: %v. %v.%v", common.CurrLine(), host, port, uniqueName, schemaName, tableName)
+		return nil, fmt.Errorf("缓存中不存在该实例(%v:%v). 获取表唯一键列名. 唯一键名称: %v. %v.%v", host, port, uniqueName, schemaName, tableName)
 	}
 
 	selectSql := `
@@ -531,7 +487,7 @@ func FindUniqueColumnNames(host string, port int, schemaName string, tableName s
 	// 查询数据库
 	rows, err := instance.Query(selectSql, schemaName, tableName, uniqueName)
 	if err != nil {
-		return nil, fmt.Errorf(" %v: 失败. 获取表唯一键列名. %v.%v %v:%v %v: %v", common.CurrLine(), schemaName, tableName, host, port, err, selectSql)
+		return nil, fmt.Errorf("失败. 获取表唯一键列名. %v.%v %v:%v %v: %v", schemaName, tableName, host, port, err, selectSql)
 	}
 	defer rows.Close()
 
@@ -540,7 +496,7 @@ func FindUniqueColumnNames(host string, port int, schemaName string, tableName s
 		var columnName sql.NullString
 
 		if err := rows.Scan(&columnName); err != nil {
-			return nil, fmt.Errorf("%v: scan 获取表唯一键列名. 唯一键名: %v. %v.%v %v", common.CurrLine(), uniqueName, schemaName, tableName, err)
+			return nil, fmt.Errorf("scan 获取表唯一键列名. 唯一键名: %v. %v.%v %v", uniqueName, schemaName, tableName, err)
 		}
 
 		uniqueColumnNames = append(uniqueColumnNames, columnName.String)
@@ -556,7 +512,7 @@ func FindSourceDistinctUKColumnNames(host string, port int, schemaName string, t
 
 	instance, ok := gdbc.GetDynamicDBByHostPort(host, int64(port))
 	if !ok {
-		return nil, fmt.Errorf("%v: 缓存中不存在该实例(%v:%v). 获取表所有的唯一键列名(包括主键). %v.%v", common.CurrLine(), host, port, schemaName, tableName)
+		return nil, fmt.Errorf("缓存中不存在该实例(%v:%v). 获取表所有的唯一键列名(包括主键). %v.%v", host, port, schemaName, tableName)
 	}
 
 	selectSql := `
@@ -575,7 +531,7 @@ func FindSourceDistinctUKColumnNames(host string, port int, schemaName string, t
 	// 查询数据库
 	rows, err := instance.Query(selectSql, schemaName, tableName)
 	if err != nil {
-		return nil, fmt.Errorf(" %v: 失败. 获取表所有的唯一键列名(包括主键). %v.%v %v:%v %v: %v", common.CurrLine(), schemaName, tableName, host, port, err, selectSql)
+		return nil, fmt.Errorf("失败. 获取表所有的唯一键列名(包括主键). %v.%v %v:%v %v: %v", schemaName, tableName, host, port, err, selectSql)
 	}
 	defer rows.Close()
 
@@ -584,7 +540,7 @@ func FindSourceDistinctUKColumnNames(host string, port int, schemaName string, t
 		var columnName sql.NullString
 
 		if err := rows.Scan(&columnName); err != nil {
-			return nil, fmt.Errorf("%v: scan 获取表所有的唯一键列名(包括主键) %v.%v %v", common.CurrLine(), schemaName, tableName, err)
+			return nil, fmt.Errorf("scan 获取表所有的唯一键列名(包括主键) %v.%v %v", schemaName, tableName, err)
 		}
 
 		distinctUK = append(distinctUK, columnName.String)
@@ -615,44 +571,34 @@ func GetTargetCreateTableSql(_configMap *config.ConfigMap, _table *Table) (strin
 		anonymousTableName := common.GetAnonymousTableName(_table.SourceName)
 
 		// 先清除存在一样的匿名表
-		err := DropTable(_configMap.Source.Host.String,
-			int(_configMap.Source.Port.Int64), _table.SourceSchema, anonymousTableName)
+		err := DropTable(_configMap.Source.Host.String, int(_configMap.Source.Port.Int64), _table.SourceSchema, anonymousTableName)
 		if err != nil {
 			return "", nil
 		}
-		log.Infof("%v: 成功. 在创建匿名表之前先清除匿名表. %v.%v (%v)",
-			common.CurrLine(), _table.SourceSchema, anonymousTableName, _table.SourceName)
+		logger.M.Infof("成功. 在创建匿名表之前先清除匿名表. %v.%v (%v)", _table.SourceSchema, anonymousTableName, _table.SourceName)
 
 		// 从源表中创建匿名表
-		err = CreateTableFromTable(_configMap.Source.Host.String,
-			int(_configMap.Source.Port.Int64), _table.SourceSchema, _table.SourceName,
-			anonymousTableName)
+		err = CreateTableFromTable(_configMap.Source.Host.String, int(_configMap.Source.Port.Int64), _table.SourceSchema, _table.SourceName, anonymousTableName)
 		if err != nil {
 			return "", nil
 		}
-		log.Infof("%v: 成功. 创建匿名表. %v.%v (%v)", common.CurrLine(),
-			_table.SourceSchema, anonymousTableName, _table.SourceName)
+		logger.M.Infof("成功. 创建匿名表. %v.%v (%v)", _table.SourceSchema, anonymousTableName, _table.SourceName)
 
 		// 获取所有需要删除的列名, 并删表除列
 		ignoreColumnNames := _table.FindSourceIgnoreNames()
-		err = DropTableColumnAndIndex(_configMap.Source.Host.String,
-			int(_configMap.Source.Port.Int64), _table.SourceSchema, anonymousTableName,
-			ignoreColumnNames, nil)
+		err = DropTableColumnAndIndex(_configMap.Source.Host.String, int(_configMap.Source.Port.Int64), _table.SourceSchema, anonymousTableName, ignoreColumnNames, nil)
 		if err != nil {
 			return "", nil
 		}
 
 		// 获取匿名表的建表语句
-		createTableSql, err = GetCreateTableSql(_configMap.Source.Host.String,
-			int(_configMap.Source.Port.Int64), _table.SourceSchema, anonymousTableName)
+		createTableSql, err = GetCreateTableSql(_configMap.Source.Host.String, int(_configMap.Source.Port.Int64), _table.SourceSchema, anonymousTableName)
 		if err != nil {
 			return "", err
 		}
-
 	} else { // 全字段迁移, 直接获取源表建表sql
 		var err error
-		createTableSql, err = GetCreateTableSql(_configMap.Source.Host.String,
-			int(_configMap.Source.Port.Int64), _table.SourceSchema, _table.SourceName)
+		createTableSql, err = GetCreateTableSql(_configMap.Source.Host.String, int(_configMap.Source.Port.Int64), _table.SourceSchema, _table.SourceName)
 		if err != nil {
 			return "", err
 		}
@@ -684,13 +630,11 @@ func GetTargetCreateTableSql(_configMap *config.ConfigMap, _table *Table) (strin
 		targetColumnName = common.GetBackquote(targetColumnName)
 
 		// 将所有的源字段替换为目标字段
-		createSqlBody = strings.Replace(createSqlBody, usefulColumnName,
-			targetColumnName, -1)
+		createSqlBody = strings.Replace(createSqlBody, usefulColumnName, targetColumnName, -1)
 	}
 
 	// 4. 将第一行 (CREATE TABLE `store` () 丢弃, 并且替换称目标表
-	firstLine := fmt.Sprintf("/* go-d-bus */ CREATE TABLE IF NOT EXISTS `%v`.`%v` (\n",
-		_table.TargetSchema, _table.TargetName)
+	firstLine := fmt.Sprintf("/* go-d-bus */ CREATE TABLE IF NOT EXISTS `%v`.`%v` (\n", _table.TargetSchema, _table.TargetName)
 
 	// 获得最终目标的 建表 SQL
 	targetCreateTableSql := fmt.Sprintf("%v%v", firstLine, createSqlBody)
@@ -708,7 +652,7 @@ Params:
 func GetCreateTableSql(host string, port int, schemaName string, tableName string) (string, error) {
 	instance, ok := gdbc.GetDynamicDBByHostPort(host, int64(port))
 	if !ok {
-		return "", fmt.Errorf("%v: 缓存中不存在该实例(%v:%v). 获取表创建sql. %v.%v", common.CurrLine(), host, port, schemaName, tableName)
+		return "", fmt.Errorf("缓存中不存在该实例(%v:%v). 获取表创建sql. %v.%v", host, port, schemaName, tableName)
 	}
 
 	selectSql := fmt.Sprintf("/* go-d-bus */ SHOW CREATE TABLE `%v`.`%v`", schemaName, tableName)
@@ -716,7 +660,7 @@ func GetCreateTableSql(host string, port int, schemaName string, tableName strin
 	// 查询数据库
 	rows, err := instance.Query(selectSql)
 	if err != nil {
-		return "", fmt.Errorf(" %v: 失败. 获取表创建sql %v.%v %v:%v %v: %v", common.CurrLine(), schemaName, tableName, host, port, err, selectSql)
+		return "", fmt.Errorf("失败. 获取表创建sql %v.%v %v:%v %v: %v", schemaName, tableName, host, port, err, selectSql)
 	}
 	defer rows.Close()
 
@@ -728,7 +672,7 @@ func GetCreateTableSql(host string, port int, schemaName string, tableName strin
 	}
 
 	if !createTableSql.Valid || createTableSql.String == "" {
-		return "", fmt.Errorf("%v: 失败. sql执行成功, 但是没有获取到建表sql. %v.%v %v:%v %v. %v", common.CurrLine(), schemaName, tableName, host, port, err, selectSql)
+		return "", fmt.Errorf("失败. sql执行成功, 但是没有获取到建表sql. %v.%v %v:%v %v. %v", schemaName, tableName, host, port, err, selectSql)
 	}
 
 	return createTableSql.String, nil
@@ -744,7 +688,7 @@ Params:
 func DropTable(host string, port int, schemaName string, tableName string) error {
 	instance, ok := gdbc.GetDynamicDBByHostPort(host, int64(port))
 	if !ok {
-		return fmt.Errorf("%v: 缓存中不存在该实例(%v:%v). 删除匿名表sql. %v.%v", common.CurrLine(), host, port, schemaName, tableName)
+		return fmt.Errorf("缓存中不存在该实例(%v:%v). 删除匿名表sql. %v.%v", host, port, schemaName, tableName)
 	}
 
 	dropSql := fmt.Sprintf("/* go-d-bus */ DROP TABLE IF EXISTS `%v`.`%v`", schemaName, tableName)
@@ -752,7 +696,7 @@ func DropTable(host string, port int, schemaName string, tableName string) error
 	// 查询数据库
 	_, err := instance.Exec(dropSql)
 	if err != nil {
-		return fmt.Errorf("%v: 失败. 清理匿名表. %v.%v %v:%v. %v. %v", common.CurrLine(), schemaName, tableName, host, port, err, dropSql)
+		return fmt.Errorf("失败. 清理匿名表. %v.%v %v:%v. %v. %v", schemaName, tableName, host, port, err, dropSql)
 	}
 
 	return nil
@@ -769,7 +713,7 @@ Params:
 func CreateTableFromTable(host string, port int, schemaName string, fromName string, toName string) error {
 	instance, ok := gdbc.GetDynamicDBByHostPort(host, int64(port))
 	if !ok {
-		return fmt.Errorf("%v: 缓存中不存在该实例(%v:%v). 创建表. %v.%v -> %v %v:%v", common.CurrLine(), schemaName, fromName, toName, host, port)
+		return fmt.Errorf("缓存中不存在该实例(%v:%v). 创建表. %v.%v -> %v %v:%v", schemaName, fromName, toName, host, port)
 	}
 
 	createSql := fmt.Sprintf("/* go-d-bus */ CREATE TABLE IF NOT EXISTS `%v`.`%v` LIKE `%v`.`%v`", schemaName, toName, schemaName, fromName)
@@ -777,7 +721,7 @@ func CreateTableFromTable(host string, port int, schemaName string, fromName str
 	// 查询数据库
 	_, err := instance.Exec(createSql)
 	if err != nil {
-		return fmt.Errorf("%v: 失败. 创建表. %v.%v -> %v %v:%v. %v. %v", common.CurrLine(), schemaName, fromName, toName, host, port, err, createSql)
+		return fmt.Errorf("失败. 创建表. %v.%v -> %v %v:%v. %v. %v", schemaName, fromName, toName, host, port, err, createSql)
 	}
 
 	return nil
@@ -798,13 +742,13 @@ func DropTableColumnAndIndex(host string, port int, schemaName string, tableName
 
 	instance, ok := gdbc.GetDynamicDBByHostPort(host, int64(port))
 	if !ok {
-		return fmt.Errorf("%v: 缓存中不存在该实例(%v:%v). 删除表的字段和索引. %v.%v %v:%v. %v", common.CurrLine(), schemaName, tableName, host, port, alterDropSql)
+		return fmt.Errorf("缓存中不存在该实例(%v:%v). 删除表的字段和索引. %v.%v %v:%v. %v", schemaName, tableName, host, port, alterDropSql)
 	}
 
 	// 查询数据库
 	_, err := instance.Exec(alterDropSql)
 	if err != nil {
-		return fmt.Errorf("%v: 失败. 执行删除表字段和索引. %v.%v %v:%v. %v %v", common.CurrLine(), schemaName, tableName, host, port, err, alterDropSql)
+		return fmt.Errorf("失败. 执行删除表字段和索引. %v.%v %v:%v. %v %v", schemaName, tableName, host, port, err, alterDropSql)
 	}
 
 	return nil
@@ -831,11 +775,9 @@ func FindAllMigrationTableNameMap() map[string]*MigrationTableName {
 
 // 记录所有需要迁移的表
 func ShowAllMigrationTableNames() {
-	log.Infof("%v: 需要迁移的表:", common.CurrLine())
 	migrationTableMap.Range(func(_tableNameInterface, _tableInterface interface{}) bool {
 		table := _tableInterface.(interface{}).(*Table)
-		log.Infof("%v: `%v`.`%v` -> `%v`.`%v`", common.CurrLine(),
-			table.SourceSchema, table.SourceName, table.TargetSchema, table.TargetName)
+		logger.M.Infof("需要迁移的表: `%v`.`%v` -> `%v`.`%v`", table.SourceSchema, table.SourceName, table.TargetSchema, table.TargetName)
 		return true
 	})
 }
@@ -844,13 +786,11 @@ func ShowAllMigrationTableNames() {
 func ShowAllIgnoreMigrationTableNames(_configMap *config.ConfigMap) {
 	migrationTableNameMap := FindAllMigrationTableNameMap()
 
-	log.Warningf("%v: 不满足迁移条件, 被忽略的表:", common.CurrLine())
 	for configTableName, configTable := range _configMap.TableMapMap {
 		if _, ok := migrationTableNameMap[configTableName]; !ok {
 			targetSchema := _configMap.SchemaMapMap[configTable.Schema.String].Target.String
-			log.Warningf("%v: `%v`.`%v` -> `%v`.`%v`", common.CurrLine(),
-				configTable.Schema.String, configTable.Source.String, targetSchema,
-				configTable.Target.String)
+			logger.M.Warnf("不满足迁移条件, 被忽略的表: `%v`.`%v` -> `%v`.`%v`",
+				configTable.Schema.String, configTable.Source.String, targetSchema, configTable.Target.String)
 		}
 	}
 }

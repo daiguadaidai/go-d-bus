@@ -12,4 +12,6 @@ require (
 	github.com/outbrain/golib v0.0.0-20200503083229-2531e5dbcc71
 	github.com/spf13/cobra v1.4.0
 	go.uber.org/atomic v1.7.0
+	go.uber.org/zap v1.16.0
+	gopkg.in/natefinch/lumberjack.v2 v2.0.0
 )

@@ -25,7 +25,7 @@ func GetRows(rows *sql.Rows) ([][]interface{}, error) {
 		results := make([]interface{}, len(columns))
 		//将行数据保存到record字典
 		if err = rows.Scan(scanArgs...); err != nil {
-			return nil, fmt.Errorf("%v: scan字段出错. %v", common.CurrLine(), err)
+			return nil, fmt.Errorf("scan字段出错. %v", err)
 		}
 
 		for i, value := range values {

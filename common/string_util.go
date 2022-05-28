@@ -3,8 +3,6 @@ package common
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/juju/errors"
-	"github.com/outbrain/golib/log"
 	"strconv"
 	"strings"
 	"time"
@@ -109,39 +107,6 @@ func Map2Json(_map map[string]interface{}) (string, error) {
 	return string(b), nil
 }
 
-/* 比较 mapA 是否 >= mapB
-1. 先比较元素个数, 元素多的更大
-2. 循环 mapA 比较 mapB
-Params:
-    _mapA: 第一个map
-    _mapB: 第二个map
-*/
-func MapAGreaterOrEqualMapB(_mapA map[string]interface{}, _mapB map[string]interface{}) bool {
-	mapALen := len(_mapA)
-	mapBLen := len(_mapB)
-	if mapALen == mapBLen { // 元素个数相等需要比较里面的值
-		for keyA, valueA := range _mapA {
-			if valueB, ok := _mapB[keyA]; ok { // 两个 map 中都有值
-				if GreaterOrEqual(valueA, valueB) { // valueA >= valueB, 这是我们想要的
-					continue
-				} else {
-					return false
-				}
-			} else {
-				log.Warningf("%v: 失败. map比较, key: %v. mapA中有数据在mapB中找不到. %v <=> %v",
-					CurrLine(), keyA, _mapA, _mapB)
-				return false
-			}
-		}
-	} else if mapALen < mapBLen {
-		return true
-	} else if mapALen > mapBLen {
-		return false
-	}
-
-	return true
-}
-
 /* 比较 _dataA 是否小于 _dataB
 Params:
     _dataA: 第一个值
@@ -234,7 +199,6 @@ Params:
 func String2ValueByType(_value string, _type int) (interface{}, error) {
 	switch _type {
 	case GO_TYPE_INT, GO_TYPE_INT8, GO_TYPE_INT16, GO_TYPE_INT32, GO_TYPE_INT64:
-
 		data, err := strconv.Atoi(_value)
 		if err != nil {
 			return nil, err
@@ -242,27 +206,20 @@ func String2ValueByType(_value string, _type int) (interface{}, error) {
 		return data, nil
 
 	case GO_TYPE_STRING:
-
 		return _value, nil
 
 	case GO_TYPE_FLOAT, GO_TYPE_FLOAT32, GO_TYPE_FLOAT64:
-
 		return _value, nil
 
 	case GO_TYPE_BOOL:
-
 		if strings.ToUpper(_value) == "TRUE" {
 			return true, nil
 		} else if strings.ToUpper(_value) == "FALSE" {
 			return false, nil
 		} else {
-			log.Warningf("%v: 将字符串转为化bool类型遇到(未知数据): %v,"+
-				"将此数据转化为 false",
-				CurrLine(), _value)
 			return false, nil
 		}
 	}
 
-	errMSG := fmt.Sprintf("%v: 失败. 转化数据库字段信息出错遇到未知类型", CurrLine())
-	return -1, errors.New(errMSG)
+	return -1, fmt.Errorf("失败. 转化数据库字段信息出错遇到未知类型")
 }

@@ -16,18 +16,19 @@ package cmd
 
 import (
 	"fmt"
+	"github.com/daiguadaidai/go-d-bus/common"
+	"github.com/daiguadaidai/go-d-bus/logger"
 	"github.com/daiguadaidai/go-d-bus/setting"
 	"os"
 
 	"github.com/daiguadaidai/go-d-bus/parser"
 	"github.com/daiguadaidai/go-d-bus/service"
-	"github.com/liudng/godump"
-	"github.com/outbrain/golib/log"
 	"github.com/spf13/cobra"
 )
 
 var runParser *parser.RunParser
 var mysqlConfig *setting.MysqlConfig
+var logConfig *setting.LogConfig
 
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
@@ -76,27 +77,35 @@ var runCmd = &cobra.Command{
     --mysql-max-open-conns=1 \
     --mysql-max-idle-conns=1 \
     --mysql-allow-old-password=1 \
-    --mysql-auto-commit=true 
-    
+    --mysql-auto-commit=true \
+    --log-filename="./go_d_bus.log" \
+    --log-level="info" \
+    --log-max-size=1024 \
+    --log-max-backups=10 \
+    --log-max-age=30 \
+    --log-compress=false \
+    --log-console=false
     `,
 	// Uncomment the following line if your bare application
 	// has an action associated with it:
 	Run: func(cmd *cobra.Command, args []string) {
+		// 初始化日志
+		logger.InitLogger(logConfig)
+
 		// 初始化orm实例
 		if err := parser.InitOrmDB(mysqlConfig); err != nil {
-			log.Fatalf("%v", err)
+			logger.M.Fatal(err)
 		}
-		godump.Dump(mysqlConfig)
+		logger.M.Info(common.ToJsonStrPretty(mysqlConfig))
 
 		// 检测命令行输入的参数
 		if err := runParser.Parse(); err != nil {
-			log.Fatalf("%v", err)
+			logger.M.Fatal(err)
 		}
-		godump.Dump(runParser)
+		logger.M.Info(common.ToJsonStrPretty(runParser))
 
 		// 开始迁移
 		service.StartMigration(runParser)
-
 	},
 }
 
@@ -133,6 +142,9 @@ func init() {
 
 	// 初始化 mysql 配置信息
 	initMysqlConfig()
+
+	// 初始化 日志配置
+	initLogConfig()
 
 	// 接收 rollback 命令 flags
 }
@@ -174,4 +186,16 @@ func initMysqlConfig() {
 	rootCmd.PersistentFlags().IntVar(&mysqlConfig.MysqlMaxIdleConns, "mysql-max-idle-conns", setting.DefaultMysqlMaxIdleConns, "Mysql最大空闲链接数")
 	rootCmd.PersistentFlags().IntVar(&mysqlConfig.MysqlAllowOldPasswords, "mysql-allow-old-passwords", setting.DefaultMysqlAllowOldPasswords, "Mysql是否兼容老密码链接方式")
 	rootCmd.PersistentFlags().BoolVar(&mysqlConfig.MysqlAutoCommit, "mysql-auto-commit", setting.DefaultMysqlAutoCommit, "Mysql自动提交")
+}
+
+func initLogConfig() {
+	logConfig = new(setting.LogConfig)
+
+	rootCmd.PersistentFlags().StringVar(&logConfig.LogFilename, "log-filename", "", "默认日志文件路径")
+	rootCmd.PersistentFlags().StringVar(&logConfig.LogLevel, "log-level", setting.DefaultLogLevel, "日志级别: debug, info, warn, error, dpanic, panic, fatal")
+	rootCmd.PersistentFlags().IntVar(&logConfig.LogMaxSize, "log-max-size", setting.DefaultLogMaxSize, "每个日志文件最大多大(单位:M)")
+	rootCmd.PersistentFlags().IntVar(&logConfig.LogMaxBackups, "log-max-backups", setting.DefaultLogMaxBackups, "日志文件最多保存多少个备份")
+	rootCmd.PersistentFlags().IntVar(&logConfig.LogMaxAge, "log-max-age", setting.DefaultLogMaxAge, "文件最多保存多少天(单位:天)")
+	rootCmd.PersistentFlags().BoolVar(&logConfig.LogCompress, "log-compress", setting.DefaultLogCompress, "是否压缩")
+	rootCmd.PersistentFlags().BoolVar(&logConfig.LogConsole, "log-console", setting.DefaultLogConsole, "是否打印到控制台")
 }

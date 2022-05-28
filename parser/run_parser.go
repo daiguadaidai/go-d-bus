@@ -3,11 +3,9 @@ package parser
 import (
 	"database/sql"
 	"fmt"
-	"github.com/daiguadaidai/go-d-bus/common"
 	"github.com/daiguadaidai/go-d-bus/dao"
 	"github.com/daiguadaidai/go-d-bus/gdbc"
-	"github.com/juju/errors"
-	"github.com/outbrain/golib/log"
+	"github.com/daiguadaidai/go-d-bus/logger"
 	"strings"
 )
 
@@ -103,7 +101,7 @@ func (this *RunParser) ParseStartBinlogInfo() error {
 		if this.StartLogPos >= 0 { // 命令行有指定开始的 binlog 位点
 			return nil
 		} else { // 命令行没有指定开始的binlog 位点, 进行赋值为 0
-			log.Warningf("指定了开始binlog文件, 但是没有指定开始binlog pos, 将开始binlog pos 设置为0. %v -> 0 %v", this.StartLogPos, common.CurrLine())
+			logger.M.Warnf("指定了开始binlog文件, 但是没有指定开始binlog pos, 将开始binlog pos 设置为0. %v -> 0", this.StartLogPos)
 			this.StartLogPos = 0
 			return nil
 		}
@@ -114,7 +112,7 @@ func (this *RunParser) ParseStartBinlogInfo() error {
 	columnStr := "log_file, log_pos, start_log_file, start_log_pos"
 	source, err := sourceDao.GetByTaskUUID(this.TaskUUID, columnStr)
 	if err != nil {
-		return fmt.Errorf("失败. 获取数据库源实例开始位点信息(获取数据库错误). Task UUID: %v %v %v", this.TaskUUID, err, common.CurrLine())
+		return fmt.Errorf("失败. 获取数据库源实例开始位点信息(获取数据库错误). Task UUID: %v %v", this.TaskUUID, err)
 	}
 
 	// 数据库中有当期应用到的位点
@@ -127,7 +125,7 @@ func (this *RunParser) ParseStartBinlogInfo() error {
 			this.StartLogPos = 0
 			return nil
 		}
-		log.Warningf("位点信息来源于数据库的当前应用位点, %v:%v, %v", this.StartLogFile, this.StartLogPos, common.CurrLine())
+		logger.M.Warnf("位点信息来源于数据库的当前应用位点, %v:%v", this.StartLogFile, this.StartLogPos)
 
 		return nil
 	}
@@ -142,7 +140,7 @@ func (this *RunParser) ParseStartBinlogInfo() error {
 			this.StartLogPos = 0
 			return nil
 		}
-		log.Warningf("位点信息来源于数据库的开始位点, %v:%v %v", this.StartLogFile, this.StartLogPos, common.CurrLine())
+		logger.M.Warnf("位点信息来源于数据库的开始位点, %v:%v", this.StartLogFile, this.StartLogPos)
 
 		return nil
 	}
@@ -150,7 +148,7 @@ func (this *RunParser) ParseStartBinlogInfo() error {
 	// 没有有效可用的 binlog位点, 会在后面使用 show master status 来获取
 	this.StartLogFile = ""
 	this.StartLogPos = -1
-	log.Warningf("没有获取到有效的开始位点信息 %v", common.CurrLine())
+	logger.M.Warn("没有获取到有效的开始位点信息")
 
 	return nil
 }
@@ -162,7 +160,7 @@ func (this *RunParser) ParseStopBinlogInfo() error {
 		if this.StopLogPos >= 0 { // 命令行有指定停止的 binlog 位点
 			return nil
 		} else { // 命令行没有指定停止的binlog 位点, 进行赋值为 0
-			log.Warningf("指定了停止binlog文件, 但是没有指定停止binlog pos, 将停止binlog pos 设置为0. %v -> 0 %v", this.StopLogPos, common.CurrLine())
+			logger.M.Warnf("指定了停止binlog文件, 但是没有指定停止binlog pos, 将停止binlog pos 设置为0. %v -> 0", this.StopLogPos)
 			this.StopLogPos = 0
 			return nil
 		}
@@ -173,7 +171,7 @@ func (this *RunParser) ParseStopBinlogInfo() error {
 	columnStr := "stop_log_file, stop_log_pos"
 	source, err := sourceDao.GetByTaskUUID(this.TaskUUID, columnStr)
 	if err != nil {
-		return fmt.Errorf("失败. 获取数据库源实例停止位点信息(获取数据库错误). Task UUID: %v %v %v", this.TaskUUID, err, common.CurrLine())
+		return fmt.Errorf("失败. 获取数据库源实例停止位点信息(获取数据库错误). Task UUID: %v %v", this.TaskUUID, err)
 	}
 
 	// 数据库中有指定停止位点
@@ -186,14 +184,14 @@ func (this *RunParser) ParseStopBinlogInfo() error {
 			this.StopLogPos = 0
 			return nil
 		}
-		log.Warningf("位点信息来源于数据库的停止位点, %v:%v %v", this.StopLogFile, this.StopLogPos, common.CurrLine())
+		logger.M.Warnf("位点信息来源于数据库的停止位点, %v:%v", this.StopLogFile, this.StopLogPos)
 
 		return nil
 	}
 
 	this.StopLogFile = ""
 	this.StopLogPos = -1
-	log.Warningf("有指定和获取到停止的位点信息 %v", common.CurrLine())
+	logger.M.Warn("有指定和获取到停止的位点信息")
 
 	return nil
 }
@@ -210,21 +208,21 @@ func (this *RunParser) ParseApplyBinlogParaller() {
 	columnStr := "binlog_paraller"
 	task, err := taskDao.GetByTaskUUID(this.TaskUUID, columnStr)
 	if err != nil {
-		log.Errorf("失败. 解析应用binlog并发参数失败(从数据库获取数据时). 将设置称默认值: %v %v", APPLY_BINLOG_PARALLER, common.CurrLine())
+		logger.M.Errorf("失败. 解析应用binlog并发参数失败(从数据库获取数据时). 将设置称默认值: %v", APPLY_BINLOG_PARALLER)
 		this.ApplyBinlogParaller = APPLY_BINLOG_PARALLER
 		return
 	}
 
 	// 数据库中有 应用binlog的并发数
 	if task.BinlogParaller.Valid && task.BinlogParaller.Int64 > 0 {
-		log.Warningf("Apply Binlog 并发数从数据库中获取. %v %v", task.RowCopyParaller.Int64, common.CurrLine())
+		logger.M.Warnf("Apply Binlog 并发数从数据库中获取. %v", task.RowCopyParaller.Int64)
 		this.ApplyBinlogParaller = int(task.BinlogParaller.Int64)
 		return
 	}
 
 	// 数据库也获取不到则使用默认值
 	this.ApplyBinlogParaller = APPLY_BINLOG_PARALLER
-	log.Warningf("无法获取到 Apply Binlog 并发数. 使用默认值: %v %v", APPLY_BINLOG_PARALLER, common.CurrLine())
+	logger.M.Warnf("无法获取到 Apply Binlog 并发数. 使用默认值: %v", APPLY_BINLOG_PARALLER)
 	return
 }
 
@@ -240,21 +238,21 @@ func (this *RunParser) ParseRowCopyParaller() {
 	columnStr := "row_copy_paraller"
 	task, err := taskDao.GetByTaskUUID(this.TaskUUID, columnStr)
 	if err != nil {
-		log.Errorf("失败. 解析并发参数失败(从数据库获取数据时). 将设置称默认值: %v %v", ROW_COPY_PARALLER, common.CurrLine())
+		logger.M.Errorf("失败. 解析并发参数失败(从数据库获取数据时). 将设置称默认值: %v", ROW_COPY_PARALLER)
 		this.RowCopyParaller = ROW_COPY_PARALLER
 		return
 	}
 
 	// 在数据库中有 row copy 的并发数
 	if task.RowCopyParaller.Valid && task.RowCopyParaller.Int64 > 0 {
-		log.Warningf("Row copy 并发数从数据库中获取. %v %v", task.RowCopyParaller.Int64, common.CurrLine())
+		logger.M.Warnf("Row copy 并发数从数据库中获取. %v", task.RowCopyParaller.Int64)
 		this.RowCopyParaller = int(task.RowCopyParaller.Int64)
 		return
 	}
 
 	// 数据库中没有则使用默认值
 	this.RowCopyParaller = ROW_COPY_PARALLER
-	log.Warningf("无法获取到row copy 并发数. 使用默认值: %v %v", ROW_COPY_PARALLER, common.CurrLine())
+	logger.M.Warnf("无法获取到row copy 并发数. 使用默认值: %v", ROW_COPY_PARALLER)
 	return
 }
 
@@ -270,21 +268,21 @@ func (this *RunParser) ParseChecksumParaller() {
 	columnStr := "checksum_paraller"
 	task, err := taskDao.GetByTaskUUID(this.TaskUUID, columnStr)
 	if err != nil {
-		log.Errorf("失败. 解析checksum并发参数失败(从数据库获取数据时). 将设置称默认值: %v %v", CHECKSUM_PARALLER, common.CurrLine())
+		logger.M.Errorf("失败. 解析checksum并发参数失败(从数据库获取数据时). 将设置称默认值: %v", CHECKSUM_PARALLER)
 		this.ChecksumParaller = CHECKSUM_PARALLER
 		return
 	}
 
 	// 在数据库中有 row copy 的并发数
 	if task.ChecksumParaller.Valid && task.ChecksumParaller.Int64 > 0 {
-		log.Warningf("Checksum 并发数从数据库中获取. %v %v", task.ChecksumParaller.Int64, common.CurrLine())
+		logger.M.Warnf("Checksum 并发数从数据库中获取. %v", task.ChecksumParaller.Int64)
 		this.ChecksumParaller = int(task.ChecksumParaller.Int64)
 		return
 	}
 
 	// 数据库中没有则使用默认值
 	this.ChecksumParaller = CHECKSUM_PARALLER
-	log.Warningf("无法获取到 checksum 并发数. 使用默认值: %v %v", CHECKSUM_PARALLER, common.CurrLine())
+	logger.M.Warnf("无法获取到 checksum 并发数. 使用默认值: %v", CHECKSUM_PARALLER)
 	return
 }
 
@@ -299,21 +297,21 @@ func (this *RunParser) ParseChecksumFixParaller() {
 	columnStr := "checksum_fix_paraller"
 	task, err := taskDao.GetByTaskUUID(this.TaskUUID, columnStr)
 	if err != nil {
-		log.Errorf("%v: 失败. 解析checksum修复数据并发参数失败(从数据库获取数据时). 将设置称默认值: %v", common.CurrLine(), CHECKSUM_FIX_PARALLER)
+		logger.M.Errorf("失败. 解析checksum修复数据并发参数失败(从数据库获取数据时). 将设置称默认值: %v", CHECKSUM_FIX_PARALLER)
 		this.ChecksumFixParaller = CHECKSUM_FIX_PARALLER
 		return
 	}
 
 	// 在数据库中有 row copy 的并发数
 	if task.ChecksumFixParaller.Valid && task.ChecksumFixParaller.Int64 > 0 {
-		log.Warningf("Checksum 修复数据并发数从数据库中获取. %v %v", task.ChecksumParaller.Int64, common.CurrLine())
+		logger.M.Warnf("Checksum 修复数据并发数从数据库中获取 %v", task.ChecksumParaller.Int64)
 		this.ChecksumFixParaller = int(task.ChecksumFixParaller.Int64)
 		return
 	}
 
 	// 数据库中没有则使用默认值
 	this.ChecksumFixParaller = CHECKSUM_FIX_PARALLER
-	log.Warningf("无法获取到 checksum 修复数据并发数. 使用默认值: %v %v", CHECKSUM_FIX_PARALLER, common.CurrLine())
+	logger.M.Warnf("无法获取到 checksum 修复数据并发数. 使用默认值: %v", CHECKSUM_FIX_PARALLER)
 	return
 }
 
@@ -326,7 +324,7 @@ func (this *RunParser) ParseApplyBinlogHighWaterMark() {
 
 	// 数据库中没有则使用默认值
 	this.ApplyBinlogHighWaterMark = APPLY_BINLOG_HIGH_WATER_MARK
-	log.Warningf("没有输入 Apply Binlog 缓存大小. 使用默认值: %v %v", APPLY_BINLOG_HIGH_WATER_MARK, common.CurrLine())
+	logger.M.Warnf("没有输入 Apply Binlog 缓存大小. 使用默认值: %v", APPLY_BINLOG_HIGH_WATER_MARK)
 	return
 }
 
@@ -339,7 +337,7 @@ func (this *RunParser) ParseRowCopyHighWaterMark() {
 
 	// 数据库中没有则使用默认值
 	this.RowCopyHighWaterMark = ROW_COPY_HIGH_WATER_MARK
-	log.Warningf("没有输入 Row Copy 缓存大小. 使用默认值: %v %v", ROW_COPY_HIGH_WATER_MARK, common.CurrLine())
+	logger.M.Warnf("没有输入 Row Copy 缓存大小. 使用默认值: %v", ROW_COPY_HIGH_WATER_MARK)
 	return
 }
 
@@ -355,22 +353,21 @@ func (this *RunParser) ParseRowCopyLimit() {
 	columnStr := "row_copy_limit"
 	task, err := taskDao.GetByTaskUUID(this.TaskUUID, columnStr)
 	if err != nil {
-		errMSG := fmt.Sprintf("失败. 解析每次row copy行数参数失败(从数据库获取数据时). 将设置称默认值: %v %v", ROW_COPY_LIMIT, common.CurrLine())
-		log.Errorf(errMSG)
+		logger.M.Errorf("失败. 解析每次row copy行数参数失败(从数据库获取数据时). 将设置称默认值: %v", ROW_COPY_LIMIT)
 		this.RowCopyLimit = ROW_COPY_LIMIT
 		return
 	}
 
 	// 在数据库中有 row copy 的并发数
 	if task.RowCopyLimit.Valid && task.RowCopyLimit.Int64 > 0 {
-		log.Warningf("Row copy 并发数从数据库中获取. %v %v", task.RowCopyParaller.Int64, common.CurrLine())
+		logger.M.Warnf("Row copy 并发数从数据库中获取. %v", task.RowCopyParaller.Int64)
 		this.RowCopyLimit = int(task.RowCopyLimit.Int64)
 		return
 	}
 
 	// 数据库中没有则使用默认值
 	this.RowCopyLimit = ROW_COPY_LIMIT
-	log.Warningf("无法获取到每次row copy的行数. 使用默认值: %v %v", ROW_COPY_LIMIT, common.CurrLine())
+	logger.M.Warnf("无法获取到每次row copy的行数. 使用默认值: %v", ROW_COPY_LIMIT)
 	return
 }
 
@@ -381,13 +378,9 @@ func (this *RunParser) ParseHeartbeat() error {
 		return nil
 	} else if strings.TrimSpace(this.HeartbeatSchema) == "" && strings.TrimSpace(this.HeartbeatTable) != "" {
 		// 只指定了 heartbeat schema 或 heatbeat table 都不行, 必须两个都指定
-		errMSG := fmt.Sprintf("失败. heartbeat schema 和 heartbeat table 必须两个都指定, 你只指定了 heartbeat schema. %v.%v %v",
-			this.HeartbeatSchema, this.HeartbeatTable, common.CurrLine())
-		return errors.New(errMSG)
+		return fmt.Errorf("失败. heartbeat schema 和 heartbeat table 必须两个都指定, 你只指定了 heartbeat schema. %v.%v", this.HeartbeatSchema, this.HeartbeatTable)
 	} else if strings.TrimSpace(this.HeartbeatSchema) != "" && strings.TrimSpace(this.HeartbeatTable) == "" {
-		errMSG := fmt.Sprintf("失败. heartbeat schema 和 heartbeat table 必须两个都指定, 你只指定了 heartbeat table. %v.%v %v",
-			this.HeartbeatSchema, this.HeartbeatTable, common.CurrLine())
-		return errors.New(errMSG)
+		return fmt.Errorf("失败. heartbeat schema 和 heartbeat table 必须两个都指定, 你只指定了 heartbeat table. %v.%v", this.HeartbeatSchema, this.HeartbeatTable)
 	}
 
 	// 如果命令行没指定则从数据库中获取
@@ -395,8 +388,7 @@ func (this *RunParser) ParseHeartbeat() error {
 	columnStr := "heartbeat_schema, heartbeat_table"
 	task, err := taskDao.GetByTaskUUID(this.TaskUUID, columnStr)
 	if err != nil {
-		errMSG := fmt.Sprintf("失败. 解析heartbeat信息(从数据库获取数据时). 将设置默认值为空字符串, 将不进行heartbeat binlog 的解析. %v %v", err, common.CurrLine())
-		log.Errorf(errMSG)
+		logger.M.Errorf("失败. 解析heartbeat信息(从数据库获取数据时). 将设置默认值为空字符串, 将不进行heartbeat binlog 的解析. %v", err)
 		this.HeartbeatSchema = HEARTBEAT_SCHEMA
 		this.HeartbeatTable = HEARTBEAT_TABLE
 		return nil
@@ -406,7 +398,7 @@ func (this *RunParser) ParseHeartbeat() error {
 	if task.HeartbeatSchema.Valid && strings.TrimSpace(task.HeartbeatSchema.String) != "" &&
 		task.HeartbeatTable.Valid && strings.TrimSpace(task.HeartbeatTable.String) != "" {
 
-		log.Warningf("heartbeat 信息中数据库中获取 %v.%v %v", task.HeartbeatSchema.String, task.HeartbeatTable.String, common.CurrLine())
+		logger.M.Warnf("heartbeat 信息中数据库中获取 %v.%v", task.HeartbeatSchema.String, task.HeartbeatTable.String)
 		this.HeartbeatSchema = task.HeartbeatSchema.String
 		this.HeartbeatTable = task.HeartbeatTable.String
 
@@ -414,33 +406,25 @@ func (this *RunParser) ParseHeartbeat() error {
 	} else if task.HeartbeatSchema.Valid && strings.TrimSpace(task.HeartbeatSchema.String) != "" &&
 		task.HeartbeatTable.Valid && strings.TrimSpace(task.HeartbeatTable.String) == "" {
 		// 数据库中只有 heartbeats chema
-		errMSG := fmt.Sprintf("失败. 数据库中只指定了 heartbeat schema. %v %v", err, common.CurrLine())
-
-		return errors.New(errMSG)
+		return fmt.Errorf("失败. 数据库中只指定了 heartbeat schema. %v", err)
 	} else if task.HeartbeatSchema.Valid && strings.TrimSpace(task.HeartbeatSchema.String) != "" &&
 		!task.HeartbeatTable.Valid {
 		// 数据库中只有 heartbeats chema
-		errMSG := fmt.Sprintf("失败. 数据库中只指定了 heartbeat schema. %v %v", err, common.CurrLine())
-
-		return errors.New(errMSG)
+		return fmt.Errorf("失败. 数据库中只指定了 heartbeat schema(2). %v", err)
 	} else if task.HeartbeatSchema.Valid && strings.TrimSpace(task.HeartbeatSchema.String) == "" &&
 		task.HeartbeatTable.Valid && strings.TrimSpace(task.HeartbeatTable.String) != "" {
 		// 数据库中只有 heartbeats table
-		errMSG := fmt.Sprintf("失败. 数据库中只指定了 heartbeat table. %v %v", err, common.CurrLine())
-
-		return errors.New(errMSG)
+		return fmt.Errorf("失败. 数据库中只指定了 heartbeat table. %v", err)
 	} else if !task.HeartbeatSchema.Valid && task.HeartbeatTable.Valid &&
 		strings.TrimSpace(task.HeartbeatTable.String) != "" {
 		// 数据库中只有 heartbeats table
-		errMSG := fmt.Sprintf("失败. 数据库中只指定了 heartbeat table. %v %v", err, common.CurrLine())
-
-		return errors.New(errMSG)
+		return fmt.Errorf("失败. 数据库中只指定了 heartbeat table(2). %v", err)
 	}
 
 	// 数据库中没有则使用默认值,
 	this.HeartbeatSchema = HEARTBEAT_SCHEMA
 	this.HeartbeatTable = HEARTBEAT_TABLE
-	log.Warningf("没有指定, 数据库中也没有 heartbeat 相关信息, 该任务则不进行 heartbeat binlog 解析. %v", common.CurrLine())
+	logger.M.Warn("没有指定, 数据库中也没有 heartbeat 相关信息, 该任务则不进行 heartbeat binlog 解析")
 	return nil
 }
 
@@ -458,7 +442,7 @@ Params:
 func (this *RunParser) SetStartBinlogInfoByHostAndPort(host string, port int) error {
 	instance, ok := gdbc.GetDynamicDBByHostPort(host, int64(port))
 	if !ok {
-		return fmt.Errorf("%v: 缓存中不存在该实例(%v:%v). 设置binlog开始位点失败", common.CurrLine(), host, port)
+		return fmt.Errorf("缓存中不存在该实例(%v:%v). 设置binlog开始位点失败", host, port)
 	}
 
 	showSql := "/* go-d-bus */ SHOW MASTER STATUS"
@@ -471,7 +455,7 @@ func (this *RunParser) SetStartBinlogInfoByHostAndPort(host string, port int) er
 
 	err := instance.QueryRow(showSql).Scan(&file, &position, &binlogDoDB, &binlogIgnoreDB, &executedGtidSet)
 	if err != nil {
-		return fmt.Errorf("%v: 失败. 获取实例 binlog 位点信息(查询sql) %v:%v %v", common.CurrLine(), host, port, err)
+		return fmt.Errorf("失败. 获取实例 binlog 位点信息(查询sql) %v:%v %v", host, port, err)
 	}
 
 	// 设置binlog位点信息
@@ -481,5 +465,5 @@ func (this *RunParser) SetStartBinlogInfoByHostAndPort(host string, port int) er
 		return nil
 	}
 
-	return fmt.Errorf("失败. 没有获得到binlog位点信息. %v:%v %v", host, port, common.CurrLine())
+	return fmt.Errorf("失败. 没有获得到binlog位点信息. %v:%v", host, port)
 }

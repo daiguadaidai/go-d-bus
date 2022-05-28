@@ -3,8 +3,7 @@ package matemap
 import (
 	"fmt"
 	"github.com/daiguadaidai/go-d-bus/common"
-	"github.com/juju/errors"
-	"github.com/outbrain/golib/log"
+	"github.com/daiguadaidai/go-d-bus/logger"
 )
 
 type Table struct {
@@ -49,9 +48,7 @@ type Table struct {
 // 初始化 源 列映射关系, 通过源列
 func (this *Table) initSourceColumnIndexMap() error {
 	if this.SourceColumns == nil || len(this.SourceColumns) == 0 {
-		errMSG := fmt.Sprintf("失败, 初始化 源 列名和位置信息. 该表没有列(源) %v.%v %v",
-			this.SourceSchema, this.SourceName, common.CurrLine())
-		return errors.New(errMSG)
+		return fmt.Errorf("失败, 初始化 源 列名和位置信息. 该表没有列(源) %v.%v", this.SourceSchema, this.SourceName)
 	}
 
 	this.SourceColumnIndexMap = make(map[string]int)
@@ -66,9 +63,7 @@ func (this *Table) initSourceColumnIndexMap() error {
 // 初始化 目标 列映射关系, 通过目标列
 func (this *Table) initTargetColumnIndexMap() error {
 	if this.TargetColumns == nil || len(this.TargetColumns) == 0 {
-		errMSG := fmt.Sprintf("失败, 初始化 失败 列名和位置信息. 该表没有列(目标) %v.%v %v",
-			this.SourceSchema, this.SourceName, common.CurrLine())
-		return errors.New(errMSG)
+		return fmt.Errorf("失败, 初始化 失败 列名和位置信息. 该表没有列(目标) %v.%v", this.SourceSchema, this.SourceName)
 	}
 
 	this.TargetColumnIndexMap = make(map[string]int)
@@ -83,9 +78,7 @@ func (this *Table) initTargetColumnIndexMap() error {
 // 初始化 源到目标 列名的映射关系,  key:源列名, value:目标列名
 func (this *Table) initSourceToTargetColumnNameMap() error {
 	if this.SourceColumns == nil || len(this.SourceColumns) == 0 {
-		errMSG := fmt.Sprintf("失败. 初始化 源到目标 列名的映射关系, 该表没有列(源) %v.%v",
-			this.SourceSchema, this.SourceName)
-		return errors.New(errMSG)
+		return fmt.Errorf("失败. 初始化 源到目标 列名的映射关系, 该表没有列(源) %v.%v", this.SourceSchema, this.SourceName)
 	}
 
 	this.SourceToTargetColumnNameMap = make(map[string]string)
@@ -100,9 +93,7 @@ func (this *Table) initSourceToTargetColumnNameMap() error {
 // 初始化 目标到源 列名的映射关系, key:目标列名, value:源列名
 func (this *Table) initTargetToSourceColumnNameMap() error {
 	if this.TargetColumns == nil || len(this.TargetColumns) == 0 {
-		errMSG := fmt.Sprintf("失败. 初始化 源到目标 列名的映射关系, 该表没有列(目标) %v.%v",
-			this.SourceSchema, this.SourceName)
-		return errors.New(errMSG)
+		return fmt.Errorf("失败. 初始化 源到目标 列名的映射关系, 该表没有列(目标) %v.%v", this.SourceSchema, this.SourceName)
 	}
 
 	this.TargetToSourceColumnNameMap = make(map[string]string)
@@ -120,10 +111,7 @@ Params:
 */
 func (this *Table) InitSourceAllUKColumnsByNames(_uKColumnNames []string) error {
 	if len(_uKColumnNames) < 1 {
-		errMSG := fmt.Sprintf("%v: 初始化源表所有的唯一键字段失败, 没有指定唯一键. "+
-			"这种情况, 可能是你的源表没有唯一键. 这不符合工具使用的要求. 请检查 %v:%v",
-			common.CurrLine(), this.SourceSchema, this.SourceName)
-		return errors.New(errMSG)
+		return fmt.Errorf("初始化源表所有的唯一键字段失败, 没有指定唯一键. 这种情况, 可能是你的源表没有唯一键. 这不符合工具使用的要求. 请检查 %v:%v", this.SourceSchema, this.SourceName)
 	}
 
 	this.SourceAllUKColumns = make([]int, len(_uKColumnNames))
@@ -137,11 +125,7 @@ func (this *Table) InitSourceAllUKColumnsByNames(_uKColumnNames []string) error 
 
 func (this *Table) InitTargetAllUKColumnsBySourceUKNames(_sourceUKColumnNames []string) error {
 	if len(_sourceUKColumnNames) < 1 {
-		errMSG := fmt.Sprintf("%v: 初始化目标表所有的唯一键字段失败, 没有指定唯一键."+
-			"这种情况, 可能是你的源表没有唯一键.这不符合工具使用的要求. 请检查 %v:%v",
-			common.CurrLine(), this.SourceSchema, this.SourceName)
-		return errors.New(errMSG)
-
+		return fmt.Errorf("初始化目标表所有的唯一键字段失败, 没有指定唯一键. 这种情况, 可能是你的源表没有唯一键.这不符合工具使用的要求. 请检查 %v:%v", this.SourceSchema, this.SourceName)
 	}
 
 	this.TargetAllUKColumns = make([]int, len(_sourceUKColumnNames))
@@ -879,13 +863,8 @@ func (this *Table) FindSourcePKColumnGoTypeMap() map[string]int {
 	for _, columnIndex := range this.SourcePKColumns {
 		goType, err := common.SqlType2GoType(this.SourceColumns[columnIndex].Type)
 		if err != nil {
-			warnMSG := fmt.Sprintf("%v: 获取源表主键对应的Golang类型, "+
-				"MySQL类型 -> Golang类型出错. %v.%v: %v(%v). %v",
-				common.CurrLine(), this.SourceSchema, this.SourceName,
-				this.SourceColumns[columnIndex].Name,
-				this.SourceColumns[columnIndex].Type,
-				err)
-			log.Warningf(warnMSG)
+			logger.M.Warnf("获取源表主键对应的Golang类型, MySQL类型 -> Golang类型出错. %v.%v: %v(%v). %v",
+				this.SourceSchema, this.SourceName, this.SourceColumns[columnIndex].Name, this.SourceColumns[columnIndex].Type, err)
 		}
 		pkColumnsTypeMap[this.SourceColumns[columnIndex].Name] = goType
 	}

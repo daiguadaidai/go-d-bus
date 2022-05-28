@@ -2,11 +2,10 @@ package gdbc
 
 import (
 	"fmt"
-	"github.com/daiguadaidai/go-d-bus/common"
+	"github.com/daiguadaidai/go-d-bus/logger"
 	"github.com/daiguadaidai/go-d-bus/setting"
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/jinzhu/gorm"
-	"github.com/outbrain/golib/log"
 )
 
 var ormDB *gorm.DB
@@ -18,14 +17,14 @@ func SetOrmDB(mysqlConfig *setting.MysqlConfig) error {
 	}
 	ormDB, err = gorm.Open("mysql", dataSource)
 	if err != nil {
-		log.Errorf("%v: 打开ORM数据库实例错误, %v", common.CurrLine(), err)
+		logger.M.Errorf("打开ORM数据库实例错误, %v", err)
 	}
 
 	ormDB.DB().SetMaxOpenConns(mysqlConfig.MysqlMaxOpenConns)
 	ormDB.DB().SetMaxIdleConns(mysqlConfig.MysqlMaxIdleConns)
 
 	if err := ormDB.DB().Ping(); err != nil {
-		log.Errorf("%v: ping 数据库(d_bus)出错 orm , %v", common.CurrLine(), err)
+		logger.M.Errorf("ping 数据库(d_bus)出错 orm , %v", err)
 	}
 
 	return nil
