@@ -8,6 +8,8 @@ import (
 	"github.com/daiguadaidai/go-d-bus/gdbc"
 	"github.com/daiguadaidai/go-d-bus/matemap"
 	"github.com/daiguadaidai/go-d-bus/model"
+	"github.com/daiguadaidai/go-d-bus/service/helper"
+	_ "github.com/go-sql-driver/mysql"
 )
 
 /* 获取源实例的 checksum code
@@ -135,29 +137,12 @@ func FindSourcePKRows(host string, port int, primaryRangeValue *matemap.PrimaryR
 		return nil, fmt.Errorf("%v: 查询需要fix数据的所有主键值(修复数据, 获取所有主键值). %v. %v", common.CurrLine(), table.GetSelPerBatchSourcePKSqlTpl(), err)
 	}
 
-	columns, _ := rows.Columns()
-	columnSize := len(columns)
-	scanArgs := make([]interface{}, columnSize) // 扫描使用
-	values := make([]interface{}, columnSize)   // 映射使用
-	for i := range values {
-		scanArgs[i] = &values[i]
+	rs, err := helper.GetRows(rows)
+	if err != nil {
+		return nil, fmt.Errorf("%v: , checksum 获取源数据主键范围值的所有行出错. %v.", common.CurrLine(), err)
 	}
 
-	data := make([][]interface{}, 0, 1) // 最终所有的数据
-	for rows.Next() {
-		// 生成每一行
-		row := make([]interface{}, columnSize)
-		//将行数据保存到record字典
-		if err := rows.Scan(scanArgs...); err != nil {
-			return nil, fmt.Errorf("%v: scan 字段, 查询需要fix数据的所有主键值(修复数据, 获取所有主键值). %v:%v %v", common.CurrLine(), host, port, err)
-		}
-		for i, col := range values {
-			row[i] = col
-		}
-		data = append(data, row)
-	}
-
-	return data, nil
+	return rs, nil
 }
 
 /* 获取源实例单行数据的checksum值
@@ -222,8 +207,10 @@ func DeleteTargetRow(host string, port int, primaryValues []interface{}, table *
 		return fmt.Errorf("%v: 缓存中不存在该实例(%v:%v). 通过主键删除目标行", common.CurrLine(), host, port)
 	}
 
+	deleteSql := table.GetDelSqlTpl(primaryValues)
+
 	// 开启事物执行sql
-	if _, err := instance.Exec(table.GetDelSqlTpl(), primaryValues...); err != nil {
+	if _, err := instance.Exec(deleteSql); err != nil {
 		return fmt.Errorf("%v: (%v:%v). 通过主键删除目标行. %v", common.CurrLine(), host, port, err)
 	}
 
@@ -257,21 +244,12 @@ func GetSourceRowByPK(host string, port int, primaryValues []interface{}, table 
 		return nil, fmt.Errorf("%v: 查询数据库失败, 通过主键在源表获取需要修复的行数据. %v. value: %v %v", common.CurrLine(), table.GetSelSourceRowSqlTpl, primaryValues, err)
 	}
 
-	var result []interface{} = nil
-	for rows.Next() {
-		result = make([]interface{}, columnLen)
-
-		//将行数据保存到record字典
-		if err := rows.Scan(scanArgs...); err != nil {
-			return nil, fmt.Errorf("%v: scan字段数据错误, 通过主键在源表获取需要修复的行数据 %v", common.CurrLine(), err)
-		}
-
-		for i, col := range values {
-			result[i] = col
-		}
+	rs, err := helper.GetRow(rows)
+	if err != nil {
+		return nil, fmt.Errorf("%v: 查询获取一行主键数据失败, 通过主键在源表获取需要修复的行数据. %v. value: %v %v", common.CurrLine(), table.GetSelSourceRowSqlTpl, primaryValues, err)
 	}
 
-	return result, nil
+	return rs, nil
 }
 
 /* 通过主键 repalce into 目标行
@@ -288,8 +266,10 @@ func ReplaceTargetRow(host string, port int, sourceRow []interface{}, table *mat
 		return fmt.Errorf("%v: 缓存中不存在该实例(%v:%v). 通过主键 repalce into 目标行", common.CurrLine(), host, port)
 	}
 
+	replaceIntoSql := table.GetRepPerBatchSqlTpl_V2([][]interface{}{sourceRow})
+
 	// 开启事物执行sql
-	if _, err := instance.Exec(table.GetRepPerBatchSqlTpl(1), sourceRow...); err != nil {
+	if _, err := instance.Exec(replaceIntoSql); err != nil {
 		return err
 	}
 

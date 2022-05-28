@@ -22,37 +22,12 @@ func (this *ApplyBinlog) IsApplyTable(_schema string, _table string) bool {
 	return ok
 }
 
-// 增加1 需要应用的事件个数
-func (this *ApplyBinlog) IncrNeedApplyEventCount() {
-	this.NeedApplyEventCountRWMutex.Lock()
-	this.NeedApplyEventCount++
-	this.NeedApplyEventCountRWMutex.Unlock()
-}
-
-// 减少1 需要应用的事件个数
-func (this *ApplyBinlog) DecrNeedApplyEventCount() {
-	this.NeedApplyEventCountRWMutex.Lock()
-	this.NeedApplyEventCount--
-	this.NeedApplyEventCountRWMutex.Unlock()
-}
-
-// 获取需要解析事件的个数
-func (this *ApplyBinlog) GetNeedApplyEventCount() int {
-	this.NeedApplyEventCountRWMutex.RLock()
-	count := this.NeedApplyEventCount
-	this.NeedApplyEventCountRWMutex.RUnlock()
-
-	return count
-}
-
 // 等待binlog消费完成后, 并且替换表元数据信息
 func (this *ApplyBinlog) WaitingApplyEventAndReplaceTableMap(_schemaName string, _tableName string) {
 	// 每秒检测还需要应用的事件是否为 0
 	for {
-		needApplyEventCount := this.GetNeedApplyEventCount()
-
 		// 需要应用的事件为0后就可以开始重新生成该表的元数据信息
-		if needApplyEventCount == 0 {
+		if this.NeedApplyEventCount.Load() == 0 {
 			log.Infof("%v: 队列中的剩余binlog event已经消费完成. 开始生成新的元数据, %v.%v",
 				common.CurrLine(), _schemaName, _tableName)
 
@@ -129,8 +104,7 @@ func UpdateSourceLogPosInfo(
 	_stopLogPos int,
 ) int {
 	sourceDao := new(dao.SourceDao)
-	affected := sourceDao.UpdateLogPosInfo(_taskUUID, _startLogFile, _startLogPos,
-		_parseLogFile, _parseLogPos, _appliedLogFile, _appliedLogPos, _stopLogFile, _stopLogPos)
+	affected := sourceDao.UpdateLogPosInfo(_taskUUID, _startLogFile, _startLogPos, _parseLogFile, _parseLogPos, _appliedLogFile, _appliedLogPos, _stopLogFile, _stopLogPos)
 
 	return affected
 }
@@ -147,8 +121,7 @@ func GetStopLogFilePos(_taskUUID string) (string, int) {
 	columnStr := "stop_log_file, stop_log_pos"
 	source, err := sourceDao.GetByTaskUUID(_taskUUID, columnStr)
 	if err != nil {
-		log.Errorf("%v: 错误. 获取停止位点信息失败. 将设置为没有停止位点. %v",
-			common.CurrLine(), err)
+		log.Errorf("%v: 错误. 获取停止位点信息失败. 将设置为没有停止位点. %v", common.CurrLine(), err)
 		return stopLogFile, stopLogPos
 	}
 

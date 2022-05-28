@@ -211,21 +211,75 @@ func CreatePlaceholderByCount(_count int) string {
 	return strings.Join(placeholders, ", ")
 }
 
+/* 获取 Where 占位符
+%#v, %#v
+Params:
+    _count: 占位符个数
+*/
+func CreateDebugPlaceholderByCount(count int) string {
+	placeholders := make([]string, 0, count)
+
+	for i := 0; i < count; i++ {
+		placeholders = append(placeholders, "%#v")
+	}
+
+	return strings.Join(placeholders, ", ")
+}
+
 /* 获取 Insert 语句的 在为符
 (?, ?, ?), (?, ?, )
 Params:
     _columnLenth: 列的个数
     _rowCount: 需要多少行
 */
-func FormatValuesPlaceholder(_columnLenth int, _rowCount int) string {
-	valueRows := make([]string, _rowCount)
+func FormatValuesPlaceholder(columnLenth int, rowCount int) string {
+	valueRows := make([]string, rowCount)
 
-	for i := 0; i < _rowCount; i++ {
-		valueRow := fmt.Sprintf("(%v)", CreatePlaceholderByCount(_columnLenth))
+	for i := 0; i < rowCount; i++ {
+		valueRow := fmt.Sprintf("(%v)", CreatePlaceholderByCount(columnLenth))
 		valueRows[i] = valueRow
 	}
 
 	return strings.Join(valueRows, ", ")
+}
+
+/* 获取 Insert 语句的 在为符
+(1, "name", "name2"), (1, "name", "name2")
+Params:
+    _columnLenth: 列的个数
+    _rowCount: 需要多少行
+*/
+func FormatValuesPlaceholder_V2(rows [][]interface{}) string {
+
+	rowStrs := make([]string, 0, len(rows))
+	for _, row := range rows {
+		rowStr := GetInsertValues(row)
+		rowStr = strings.ReplaceAll(rowStr, "'", "\\'")
+		rowStrs = append(rowStrs, rowStr)
+	}
+
+	return strings.Join(rowStrs, ", ")
+}
+
+/* 获取 Insert 语句的一行数据的values
+(1, "name", "name2")
+*/
+func GetInsertValues(row []interface{}) string {
+	placeholders := make([]string, 0, len(row))
+	fields := make([]interface{}, 0, len(row))
+
+	for _, field := range row {
+		if field == nil {
+			placeholders = append(placeholders, "NULL")
+		} else {
+			placeholders = append(placeholders, "%#v")
+			fields = append(fields, field)
+		}
+	}
+
+	placeholderStr := fmt.Sprintf("(%v)", strings.Join(placeholders, ", "))
+
+	return fmt.Sprintf(placeholderStr, fields...)
 }
 
 func Row2Map(_row *sql.Row, _columnNames []string, _columnTypes []int) (map[string]interface{}, error) {
@@ -352,4 +406,27 @@ func SqlType2GoType(_sqlType int) (int, error) {
 
 	errMSG := fmt.Sprintf("%v: 失败. 转化数据库字段信息出错遇到未知类型", CurrLine())
 	return -1, errors.New(errMSG)
+}
+
+// 将row转化为相关类型interface
+func ConverSQLType(row []interface{}) []interface{} {
+	rs := make([]interface{}, len(row))
+	for i, field := range row {
+		if field == nil {
+			rs[i] = nil
+			continue
+		}
+		switch uintData := field.(type) {
+		case []uint8:
+			rawBytes := make([]byte, len(uintData))
+			for j, b := range uintData {
+				rawBytes[j] = byte(b)
+			}
+			rs[i] = string(rawBytes)
+		default:
+			rs[i] = field
+		}
+	}
+
+	return rs
 }

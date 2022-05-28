@@ -24,22 +24,14 @@ Params:
 	_eventType: 事件类型
 	_applyRowKey: 应用的binlog标记
 */
-func NewBinlogRowInfo(
-	_schema string,
-	_table string,
-	_before []interface{},
-	_after []interface{},
-	_eventType replication.EventType,
-	_applyRowKey string,
-) *BinlogRowInfo {
-
+func NewBinlogRowInfo(schema string, table string, before []interface{}, after []interface{}, eventType replication.EventType, applyRowKey string) *BinlogRowInfo {
 	return &BinlogRowInfo{
-		Schema:      _schema,
-		Table:       _table,
-		Before:      _before,
-		After:       _after,
-		EventType:   _eventType,
-		ApplyRowKey: _applyRowKey,
+		Schema:      schema,
+		Table:       table,
+		Before:      before,
+		After:       after,
+		EventType:   eventType,
+		ApplyRowKey: applyRowKey,
 	}
 }
 
@@ -83,10 +75,12 @@ func (this *BinlogRowInfo) GetChanSlotByAfter(_columnIndexes []int, _paraller in
 Params:
 	_columnIndexies: 相关索引信息
 */
-func (this *BinlogRowInfo) GetBeforeRow(_columnIndeies []int) []interface{} {
-	row := make([]interface{}, len(_columnIndeies))
+func (this *BinlogRowInfo) GetBeforeRow(columnIndeies []int) []interface{} {
+	cvtRow := common.ConverSQLType(this.Before)
 
-	for i, valueIndex := range _columnIndeies {
+	row := make([]interface{}, len(columnIndeies))
+	for i, valueIndex := range columnIndeies {
+		row[i] = cvtRow[valueIndex]
 		row[i] = this.Before[valueIndex]
 	}
 
@@ -97,11 +91,13 @@ func (this *BinlogRowInfo) GetBeforeRow(_columnIndeies []int) []interface{} {
 Params:
 	_columnIndies: 相关索引信息
 */
-func (this *BinlogRowInfo) GetAfterRow(_columnIndies []int) []interface{} {
-	row := make([]interface{}, len(_columnIndies))
+func (this *BinlogRowInfo) GetAfterRow(columnIndies []int) []interface{} {
+	// 将binlog转化为字符串或数字, 等相关类型
+	cvtRow := common.ConverSQLType(this.After)
 
-	for i, valueIndex := range _columnIndies {
-		row[i] = this.After[valueIndex]
+	row := make([]interface{}, len(columnIndies))
+	for i, valueIndex := range columnIndies {
+		row[i] = cvtRow[valueIndex]
 	}
 
 	return row
@@ -111,14 +107,9 @@ func (this *BinlogRowInfo) GetAfterRow(_columnIndies []int) []interface{} {
 Params:
 	_columnIndies: 相关索引信息
 */
-func (this *BinlogRowInfo) GetBeforeAndAfterRow(_columnIndies []int) ([]interface{}, []interface{}) {
-	beforeRow := make([]interface{}, len(_columnIndies))
-	afterRow := make([]interface{}, len(_columnIndies))
-
-	for i, valueIndex := range _columnIndies {
-		beforeRow[i] = this.Before[valueIndex]
-		afterRow[i] = this.After[valueIndex]
-	}
+func (this *BinlogRowInfo) GetBeforeAndAfterRow(columnIndies []int) ([]interface{}, []interface{}) {
+	beforeRow := this.GetBeforeRow(columnIndies)
+	afterRow := this.GetAfterRow(columnIndies)
 
 	return beforeRow, afterRow
 }
@@ -127,15 +118,15 @@ func (this *BinlogRowInfo) GetBeforeAndAfterRow(_columnIndies []int) ([]interfac
 Params:
 	_columnIndies: 相关列的下角表
 */
-func (this *BinlogRowInfo) IsDiffBeforeAndAfter(_columnIndies []int) bool {
-	isDiff := true
+func (this *BinlogRowInfo) IsDiffBeforeAndAfter(columnIndies []int) bool {
+	beforeRow := this.GetBeforeRow(columnIndies)
+	afterRow := this.GetAfterRow(columnIndies)
 
-	for _, valueIndex := range _columnIndies {
-		if this.Before[valueIndex] != this.After[valueIndex] { // 比较是否
-			isDiff = false
-			break
+	for i, beforeFieldValue := range beforeRow {
+		if beforeFieldValue != afterRow[i] {
+			return true
 		}
 	}
 
-	return isDiff
+	return false
 }

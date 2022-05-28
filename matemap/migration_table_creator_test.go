@@ -16,16 +16,6 @@ func TestInitMigrationTableMap(t *testing.T) {
 		t.Fatalf("%v", err)
 	}
 
-	// 设置源和目标实例配置信息
-	err = configMap.SetSourceDBConfig()
-	if err != nil {
-		t.Fatalf("%v", err)
-	}
-	err = configMap.SetTargetDBConfig()
-	if err != nil {
-		t.Fatalf("%v", err)
-	}
-
 	// 初始化具体需要迁移的表映射信息
 	err = InitMigrationTableMap(configMap)
 	if err != nil {
@@ -51,7 +41,6 @@ func TestInitMigrationTableMap(t *testing.T) {
 	fmt.Println(table.GetInsIgrBatchSqlTpl(30))
 	fmt.Println(table.GetRepPerBatchSqlTpl(30))
 	fmt.Println(table.GetUpdSqlTpl())
-	fmt.Println(table.GetDelSqlTpl())
 	fmt.Println(table.GetSelSourceRowChecksumSqlTpl())
 	fmt.Println(table.GetSelTargetRowChecksumSqlTpl())
 	fmt.Println(table.GetSelSourceRowsChecksumSqlTpl())

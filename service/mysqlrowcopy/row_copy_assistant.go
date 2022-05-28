@@ -7,6 +7,7 @@ import (
 	"github.com/daiguadaidai/go-d-bus/dao"
 	"github.com/daiguadaidai/go-d-bus/gdbc"
 	"github.com/daiguadaidai/go-d-bus/matemap"
+	"github.com/daiguadaidai/go-d-bus/service/helper"
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/juju/errors"
 	"github.com/outbrain/golib/log"
@@ -422,7 +423,7 @@ Params:
     _port: 实例 port
     _primaryRangeValue:
 */
-func SelectRowCopyData2(host string, port int, primaryRangeValue *matemap.PrimaryRangeValue) ([]interface{}, int, error) {
+func SelectRowCopyData_V2(host string, port int, primaryRangeValue *matemap.PrimaryRangeValue) ([]interface{}, int, error) {
 	// 获取需要迁移的表的元数据信息
 	table, err := matemap.GetMigrationTableBySchemaTable(primaryRangeValue.Schema, primaryRangeValue.Table)
 	if err != nil {
@@ -487,6 +488,45 @@ func SelectRowCopyData2(host string, port int, primaryRangeValue *matemap.Primar
 	return data, rowCount, nil
 }
 
+/* 获取 row copy select的数据
+Params:
+    _host: 实例 host
+    _port: 实例 port
+    _primaryRangeValue:
+*/
+func SelectRowCopyData_V3(host string, port int, primaryRangeValue *matemap.PrimaryRangeValue) ([][]interface{}, error) {
+	// 获取需要迁移的表的元数据信息
+	table, err := matemap.GetMigrationTableBySchemaTable(primaryRangeValue.Schema, primaryRangeValue.Table)
+	if err != nil {
+		return nil, err
+	}
+
+	// 获取 row copy, select sql 语句
+	selectSql := table.GetSelPerBatchSqlTpl()
+	// 获取 select where 占位符的值
+	whereValue := primaryRangeValue.GetMinMaxValueSlice(table.FindSourcePKColumnNames())
+
+	// 获取实例
+	instance, ok := gdbc.GetDynamicDBByHostPort(host, int64(port))
+	if !ok {
+		return nil, fmt.Errorf("%v: 缓存中不存在该实例(%v:%v). 获取 row copy select的数据", common.CurrLine(), host, port)
+	}
+
+	// 获取 所有行
+	rows, err := instance.Query(selectSql, whereValue...)
+	defer rows.Close()
+	if err != nil {
+		return nil, fmt.Errorf("%v: row copy 批量获取源表数据出错. %v. %v", common.CurrLine(), selectSql, err)
+	}
+
+	rs, err := helper.GetRows(rows)
+	if err != nil {
+		return nil, fmt.Errorf("%v: row copy, select 数据出错. %v. %v", common.CurrLine(), selectSql, err)
+	}
+
+	return rs, nil
+}
+
 /* RowCopy 插入数据
 Params:
     _host: 实例 host
@@ -514,6 +554,39 @@ func InsertRowCopyData(host string, port int, schema string, tableName string, r
 
 	// 开启事物执行sql
 	if _, err = instance.Exec(insertSql, data...); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+/* RowCopy 插入数据
+Params:
+    _host: 实例 host
+    _port: 实例 port
+    _schema: 数据库
+    _table: 表
+    _rowCount: row copy 行数
+    _data: insert 数据
+*/
+func InsertRowCopyData_V2(host string, port int, schema string, tableName string, rows [][]interface{}) error {
+	// 获取需要迁移表的元数据信息
+	table, err := matemap.GetMigrationTableBySchemaTable(schema, tableName)
+	if err != nil {
+		return err
+	}
+
+	// 获取执行sql
+	insertSql := table.GetInsIgrBatchSqlTpl_V2(rows)
+
+	// 获取实例
+	instance, ok := gdbc.GetDynamicDBByHostPort(host, int64(port))
+	if !ok {
+		return fmt.Errorf("%v: 缓存中不存在该实例(%v:%v). RowCopy 插入数据", common.CurrLine(), host, port)
+	}
+
+	// 开启事物执行sql
+	if _, err = instance.Exec(insertSql); err != nil {
 		return err
 	}
 

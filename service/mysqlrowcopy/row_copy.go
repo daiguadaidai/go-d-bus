@@ -61,7 +61,7 @@ type RowCopy struct {
 	AddOrDelWatingTagCompleteChan chan *AddOrDelete
 
 	// RowCopy消费并发数
-	RowCopyComsumerCount      atomic.Int64
+	RowCopyComsumerCount      *atomic.Int64
 	RowCopyConsumerCountMutex sync.RWMutex
 	RowCopyConsumeMinMaxValue map[string]sync.Map // 用于保存当前已经消费的最小的和最大的主键消费值
 
@@ -85,24 +85,25 @@ Params
 	_toChecksumChan: row copy 完成通知 checksum 的 checksum chan
 */
 func NewRowCopy(
-	_parser *parser.RunParser,
-	_configMap *config.ConfigMap,
-	_toChecksumChan chan *matemap.PrimaryRangeValue,
-	_notifySecondChecksum chan bool,
+	parser *parser.RunParser,
+	configMap *config.ConfigMap,
+	toChecksumChan chan *matemap.PrimaryRangeValue,
+	notifySecondChecksum chan bool,
 ) (*RowCopy, error) {
 
 	rowCopy := new(RowCopy)
 
 	// 初始化配置控制信息
-	rowCopy.ConfigMap = _configMap
-	rowCopy.Parser = _parser
+	rowCopy.ConfigMap = configMap
+	rowCopy.Parser = parser
+	rowCopy.RowCopyComsumerCount = atomic.NewInt64(0)
 
 	// 初始化 需要迁移的表名映射信息
 	rowCopy.MigrationTableNameMap = matemap.FindAllMigrationTableNameMap()
 	log.Infof("%v: 成功. 初始化 row copy 所有迁移的表名. 包含了可以不用迁移的", common.CurrLine())
 
 	// 初始化 传输表的 主键 范围值
-	rowCopy.PrimaryRangeValueChan = make(chan *matemap.PrimaryRangeValue, _parser.RowCopyHighWaterMark)
+	rowCopy.PrimaryRangeValueChan = make(chan *matemap.PrimaryRangeValue, parser.RowCopyHighWaterMark)
 	log.Infof("%v: 成功. 初始化传输 row copy 主键值的 通道", common.CurrLine())
 
 	// 获取 还需要生成主键范围数据的表 map: {"schema.table": true}
@@ -157,7 +158,7 @@ func NewRowCopy(
 	}
 
 	// 初始化用于传输删除还是添加 需要标记完成的 PrimaryRangeValue
-	rowCopy.AddOrDelWatingTagCompleteChan = make(chan *AddOrDelete, 2*_parser.RowCopyHighWaterMark)
+	rowCopy.AddOrDelWatingTagCompleteChan = make(chan *AddOrDelete, 2*parser.RowCopyHighWaterMark)
 	log.Infof("%v: 成功. 初始化添加还是删除需要标记id值的通道", common.CurrLine())
 
 	// 初始化通知关闭保存 row copy 进度的协程  的通道
@@ -170,10 +171,10 @@ func NewRowCopy(
 	}
 
 	// 初始化通知checksum通道
-	rowCopy.ToChecksumChan = _toChecksumChan
+	rowCopy.ToChecksumChan = toChecksumChan
 
 	// 初始化row copy 完成通知checksum进行二次checksum
-	rowCopy.NotifySecondChecksum = _notifySecondChecksum
+	rowCopy.NotifySecondChecksum = notifySecondChecksum
 
 	return rowCopy, nil
 }
@@ -361,7 +362,7 @@ func (this *RowCopy) LoopConsumePrimaryRangeValue(wg *sync.WaitGroup, _parallerT
 			}
 
 			// 真正进行 row copy 操作
-			err := this.ConsumePrimaryRangeValue(_parallerTag, primaryRangeValue)
+			err := this.ConsumePrimaryRangeValue_V2(_parallerTag, primaryRangeValue)
 			if err != nil {
 				errRetryCount++
 				log.Errorf("%v: 错误. 协程 %v, 重试第%v次. 需要重试%v次. 表: %v.%v, 最小值: %v, 最大值: %v. %v",
@@ -394,8 +395,7 @@ Params:
 3. 将数据 insert 到目标表中
 4. 通知, 该主键范围消费完成
 */
-func (this *RowCopy) ConsumePrimaryRangeValue(parallerTag int, primaryRangeValue *matemap.PrimaryRangeValue,
-) error {
+func (this *RowCopy) ConsumePrimaryRangeValue(parallerTag int, primaryRangeValue *matemap.PrimaryRangeValue) error {
 	defer func() {
 		if err := recover(); err != nil {
 			log.Errorf("%v: 错误. row copy 消费主键值发生错误. 表: %v.%v, 最小值: %v, 最大值: %v. %v. 退出 go-d-bus 程序, %v",
@@ -435,6 +435,55 @@ func (this *RowCopy) ConsumePrimaryRangeValue(parallerTag int, primaryRangeValue
 	return nil
 }
 
+/* 消费row copy 的主键值
+Params:
+    _parallerTag: 并发标记
+    _primaryRangeValue: 并发标签, 代表是第几个并发协程的操作
+1. 对PrimaryRangeValueChan进行循环获取,
+2. 对源表进行select 操作
+3. 将数据 insert 到目标表中
+4. 通知, 该主键范围消费完成
+*/
+func (this *RowCopy) ConsumePrimaryRangeValue_V2(parallerTag int, primaryRangeValue *matemap.PrimaryRangeValue) error {
+	defer func() {
+		if err := recover(); err != nil {
+			log.Errorf("%v: 错误. row copy 消费主键值发生错误. 表: %v.%v, 最小值: %v, 最大值: %v. %v. 退出 go-d-bus 程序, %v",
+				common.CurrLine(), primaryRangeValue.Schema, primaryRangeValue.Table, primaryRangeValue.MinValue, primaryRangeValue.MaxValue, err, string(debug.Stack()))
+
+			syscall.Exit(1)
+		}
+	}()
+
+	// 获取源表数据
+	rows, err := SelectRowCopyData_V3(this.ConfigMap.Source.Host.String, int(this.ConfigMap.Source.Port.Int64), primaryRangeValue)
+	if err != nil {
+		return fmt.Errorf("%v: 失败. row copy 获取源表数据错误. 表: %v.%v 最小值: %v, 最大值: %v. %v:%v, %v",
+			common.CurrLine(), primaryRangeValue.Schema, primaryRangeValue.Table, primaryRangeValue.MinValue, primaryRangeValue.MaxValue, this.ConfigMap.Source.Host.String, int(this.ConfigMap.Source.Port.Int64), err)
+	}
+	if len(rows) < 1 { // 没有数据
+		log.Warningf("%v: 警告. row copy 没有获取到表数据. 默认此次row copy 完成. 表: %v.%v. 最小值: %v, 最大值: %v",
+			common.CurrLine(), primaryRangeValue.Schema, primaryRangeValue.Table, primaryRangeValue.MinValue, primaryRangeValue.MaxValue)
+
+		return nil
+	}
+
+	// 向目标表插入数据
+	err = InsertRowCopyData_V2(this.ConfigMap.Target.Host.String, int(this.ConfigMap.Target.Port.Int64), primaryRangeValue.Schema, primaryRangeValue.Table, rows)
+	if err != nil {
+		return fmt.Errorf("%v: 失败. row copy 向目标数据库插入数据 表: %v.%v, 最小值: %v, 最大值: %v. %v:%v. %v",
+			common.CurrLine(), primaryRangeValue.Schema, primaryRangeValue.Table, primaryRangeValue.MinValue, primaryRangeValue.MaxValue, this.ConfigMap.Source.Host.String, int(this.ConfigMap.Source.Port.Int64), err)
+	}
+
+	log.Infof("%v: 完成. 协程%v, 范围 row copy 已经完成. 表: %v.%v. 最小值: %v, 最大值 %v",
+		common.CurrLine(), parallerTag, primaryRangeValue.Schema, primaryRangeValue.Table, primaryRangeValue.MinValue, primaryRangeValue.MaxValue)
+
+	// 通知删除缓存中的值
+	addOrDelete := NewAddOrDelete(primaryRangeValue.Schema, primaryRangeValue.Table, primaryRangeValue.TimestampHash, AOD_TYPE_DELETE, primaryRangeValue)
+	this.AddOrDelWatingTagCompleteChan <- addOrDelete
+
+	return nil
+}
+
 /* 将刚刚生成的 row copy 主键值 cache起来
    将已经完成的 row copy 主键值 从cache中删除
 */
@@ -449,14 +498,10 @@ func (this *RowCopy) LoopAddOrDeleteCache(wg *sync.WaitGroup) {
 
 		switch addOrDelete.Type {
 		case AOD_TYPE_ADD: // 将刚刚生成的主键值保存起来, 等待完成后删除
-			this.WaitingTagCompletePrirmaryRangeValueMap[tableName].Set(
-				addOrDelete.TimestampHash,
-				addOrDelete.PrimaryRangeValue,
-			)
+			this.WaitingTagCompletePrirmaryRangeValueMap[tableName].Set(addOrDelete.TimestampHash, addOrDelete.PrimaryRangeValue)
 
 			// 表还需要row copy +1
 			this.RowCopyNoComsumeTimes[tableName]++
-
 		case AOD_TYPE_DELETE: // 将已完成的row copy主键值删除
 
 			var minPrimaryValue *matemap.PrimaryRangeValue
@@ -488,8 +533,7 @@ func (this *RowCopy) LoopAddOrDeleteCache(wg *sync.WaitGroup) {
 
 			// 比较当前消费的主键范围最大值 是否 >= 当前row copy中的最大值
 			// 是: 将当前 row copy 的值设置成 该表row copy 消费的最大值
-			if common.MapAGreaterOrEqualMapB(addOrDelete.PrimaryRangeValue.MaxValue,
-				maxPrimaryValue.MaxValue) {
+			if common.MapAGreaterOrEqualMapB(addOrDelete.PrimaryRangeValue.MaxValue, maxPrimaryValue.MaxValue) {
 				maxPrimaryValue = addOrDelete.PrimaryRangeValue
 			}
 			// 保存最大 row copy 范围值

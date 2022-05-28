@@ -568,7 +568,7 @@ func (this *Table) InitDelSqlTpl() {
 	// 获取 主键字段 字符串
 	pkFieldsStr := common.FormatColumnNameStr(targetPKColumnNames, "`, `")
 	// 获取 Where 中需要的值的占位符
-	wherePlaceholderStr := common.CreatePlaceholderByCount(len(targetPKColumnNames))
+	wherePlaceholderStr := common.CreateDebugPlaceholderByCount(len(targetPKColumnNames))
 
 	this.delSqlTpl = fmt.Sprintf(deleteSql, tableName, pkFieldsStr, wherePlaceholderStr)
 }
@@ -700,8 +700,7 @@ func (this *Table) InitSelTargetRowsChecksumSqlTpl() {
 	// 获取 Where 中需要的值的占位符
 	wherePlaceholderStr := common.CreatePlaceholderByCount(len(pkColumnNames))
 
-	this.selTargetRowsCheckSqlTpl = fmt.Sprintf(selectSql, fieldsStr, tableName, pkFieldsStr,
-		wherePlaceholderStr, pkFieldsStr, wherePlaceholderStr)
+	this.selTargetRowsCheckSqlTpl = fmt.Sprintf(selectSql, fieldsStr, tableName, pkFieldsStr, wherePlaceholderStr, pkFieldsStr, wherePlaceholderStr)
 }
 
 // 初始化 通过主键值获取源表数据 sql 模板
@@ -725,8 +724,7 @@ func (this *Table) InitSelSourceRowSqlTpl() {
 	// 获取 Where 中需要的值的占位符
 	wherePlaceholderStr := common.CreatePlaceholderByCount(len(pkColumnNames))
 
-	this.selSourceRowSqlTpl = fmt.Sprintf(selectSql, fieldsStr, tableName, pkFieldsStr,
-		wherePlaceholderStr)
+	this.selSourceRowSqlTpl = fmt.Sprintf(selectSql, fieldsStr, tableName, pkFieldsStr, wherePlaceholderStr)
 }
 
 // 获得创建目标表语句
@@ -766,8 +764,14 @@ func (this *Table) GetSelPerBatchSqlTpl() string {
 Params:
     _rowCount: 行数
 */
-func (this *Table) GetInsIgrBatchSqlTpl(_rowCount int) string {
-	valuesPlaceholder := common.FormatValuesPlaceholder(len(this.SourceUsefulColumns), _rowCount)
+func (this *Table) GetInsIgrBatchSqlTpl(rowCount int) string {
+	valuesPlaceholder := common.FormatValuesPlaceholder(len(this.SourceUsefulColumns), rowCount)
+
+	return fmt.Sprintf(this.insIgrBatchSqlTpl, valuesPlaceholder)
+}
+
+func (this *Table) GetInsIgrBatchSqlTpl_V2(rows [][]interface{}) string {
+	valuesPlaceholder := common.FormatValuesPlaceholder_V2(rows)
 
 	return fmt.Sprintf(this.insIgrBatchSqlTpl, valuesPlaceholder)
 }
@@ -776,8 +780,18 @@ func (this *Table) GetInsIgrBatchSqlTpl(_rowCount int) string {
 Params:
     _rowCount: 行数
 */
-func (this *Table) GetRepPerBatchSqlTpl(_rowCount int) string {
-	valuesPlaceholder := common.FormatValuesPlaceholder(len(this.SourceUsefulColumns), _rowCount)
+func (this *Table) GetRepPerBatchSqlTpl(rowCount int) string {
+	valuesPlaceholder := common.FormatValuesPlaceholder(len(this.SourceUsefulColumns), rowCount)
+
+	return fmt.Sprintf(this.repPerBatchSqlTpl, valuesPlaceholder)
+}
+
+/* 获取 replace into sql 模板
+Params:
+    _rowCount: 行数
+*/
+func (this *Table) GetRepPerBatchSqlTpl_V2(rows [][]interface{}) string {
+	valuesPlaceholder := common.FormatValuesPlaceholder_V2(rows)
 
 	return fmt.Sprintf(this.repPerBatchSqlTpl, valuesPlaceholder)
 }
@@ -788,8 +802,8 @@ func (this *Table) GetUpdSqlTpl() string {
 }
 
 // 获取 delete sql 语句
-func (this *Table) GetDelSqlTpl() string {
-	return this.delSqlTpl
+func (this *Table) GetDelSqlTpl(row []interface{}) string {
+	return fmt.Sprintf(this.delSqlTpl, row...)
 }
 
 // 获取源实例表 单行checksum语句

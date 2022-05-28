@@ -27,14 +27,12 @@ Params:
     _timestampHash: 需要删除或添加的hash值
     _primaryRangeValue: 需要添加的primaryRangeValue
 */
-func NewAddOrDelete(_schema string, _table string, _timestampHash string, _type int,
-	_primaryRangeValue *matemap.PrimaryRangeValue) *AddOrDelete {
-
+func NewAddOrDelete(schema string, table string, timestampHash string, typ int, primaryRangeValue *matemap.PrimaryRangeValue) *AddOrDelete {
 	return &AddOrDelete{
-		Schema:            _schema,
-		Table:             _table,
-		Type:              _type,
-		TimestampHash:     _timestampHash,
-		PrimaryRangeValue: _primaryRangeValue,
+		Schema:            schema,
+		Table:             table,
+		Type:              typ,
+		TimestampHash:     timestampHash,
+		PrimaryRangeValue: primaryRangeValue,
 	}
 }
