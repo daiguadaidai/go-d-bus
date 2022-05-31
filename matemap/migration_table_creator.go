@@ -221,13 +221,13 @@ func GetSourceTableColumns(schemaName string, tableName string, host string, por
 	// 循环创建 column
 	for rows.Next() {
 		var tableSchema sql.NullString
-		var tableName sql.NullString
+		var tableNameScan sql.NullString
 		var columnName sql.NullString
 		var ordinalPosition sql.NullInt64
 		var columnType sql.NullString
 		var extra sql.NullString
 
-		if err := rows.Scan(&tableSchema, &tableName, &columnName, &ordinalPosition, &columnType, &extra); err != nil {
+		if err := rows.Scan(&tableSchema, &tableNameScan, &columnName, &ordinalPosition, &columnType, &extra); err != nil {
 			return nil, fmt.Errorf("scan表字段出错. %v.%v. %v", schemaName, tableName, err)
 		}
 
