@@ -338,8 +338,8 @@ func (this *Checksum) FixDiffRows(_diffRecord model.DataChecksum, _parallerTag i
 
 /* 真正开始修复数据
 Params:
-	_primaryRangeValue: 修复的数据范围值
-	_parallerTag: 并发标记
+	primaryRangeValue: 修复的数据范围值
+	parallerTag: 并发标记
 */
 func (this *Checksum) FixDiffRowsStepFix(primaryRangeValue *matemap.PrimaryRangeValue, table *matemap.Table, parallerTag int) error {
 	// 1. 获取源表id范围所有值
@@ -366,8 +366,7 @@ func (this *Checksum) FixDiffRowsStepFix(primaryRangeValue *matemap.PrimaryRange
 		if sourceCode != targetCode {
 			// 源没有数据, 目标有数据. 在目标端把数据删了
 			if sourceCode == 0 && targetCode != 0 {
-				err = DeleteTargetRow(this.ConfigMap.Target.Host.String, int(this.ConfigMap.Target.Port.Int64), pkValues, table)
-				if err != nil {
+				if err = DeleteTargetRow(this.ConfigMap.Target.Host.String, int(this.ConfigMap.Target.Port.Int64), pkValues, table); err != nil {
 					return fmt.Errorf("协程: %v, 修复数据, 删除目标行失败. %v.%v -> %v.%v. Primary: %v. %v",
 						parallerTag, table.SourceSchema, table.SourceName, table.TargetSchema, table.TargetName, pkValues, err)
 				}

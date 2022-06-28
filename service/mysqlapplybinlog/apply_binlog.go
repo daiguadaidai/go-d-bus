@@ -601,8 +601,8 @@ func (this *ApplyBinlog) ConsumeDeleteRows(binlogRowInfo *BinlogRowInfo) error {
 		return fmt.Errorf("获取迁移的表失败(应用行delete). %v", err)
 	}
 
-	// 需要用于repalce into 的数据
-	beforeRow := binlogRowInfo.GetBeforeRow(table.TargetPKColumns)
+	// 需要用于 delete 的数据
+	beforeRow := binlogRowInfo.GetDeleteBeforeRow(table.TargetPKColumns, table.TargetBinlogDeleteWhereExternalColumns)
 
 	// 获取数据库并且执行 REPLACE INTO SQL
 	instance, ok := gdbc.GetDynamicDBByHostPort(this.ConfigMap.Target.Host.String, this.ConfigMap.Target.Port.Int64)

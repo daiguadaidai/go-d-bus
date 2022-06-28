@@ -3,6 +3,7 @@ package common
 import (
 	"database/sql"
 	"fmt"
+	_ "github.com/go-sql-driver/mysql"
 	"strconv"
 	"strings"
 	"time"
@@ -281,9 +282,9 @@ func GetInsertValues(row []interface{}) string {
 	return fmt.Sprintf(placeholderStr, fields...)
 }
 
-func Row2Map(_row *sql.Row, _columnNames []string, _columnTypes []int) (map[string]interface{}, error) {
+func Row2Map(row *sql.Row, columnNames []string, columnTypes []int) (map[string]interface{}, error) {
 	rowMap := make(map[string]interface{})
-	columnLen := len(_columnTypes)
+	columnLen := len(columnTypes)
 
 	values := make([]interface{}, columnLen)   // 数据库原生二进制值
 	scanArgs := make([]interface{}, columnLen) // 接收数据库原生二进制值，该值和上面定义的values进行关联
@@ -291,8 +292,12 @@ func Row2Map(_row *sql.Row, _columnNames []string, _columnTypes []int) (map[stri
 		scanArgs[i] = &values[i]
 	}
 
-	err := _row.Scan(scanArgs...)
+	err := row.Scan(scanArgs...)
 	if err != nil {
+		if strings.Contains(err.Error(), "no rows in result set") {
+			return nil, nil
+		}
+
 		return nil, fmt.Errorf("scan 字段数据错误 %v", err)
 	}
 
@@ -300,11 +305,11 @@ func Row2Map(_row *sql.Row, _columnNames []string, _columnTypes []int) (map[stri
 	// 真的是让人摸不着头脑. 有时候 values 是 []int8, 有时候是其他基本类型,如 int, string.
 	// 同样是从数据库中查询出来的. 为啥会这样
 	for i, value := range values {
-		columnData, err := GetColumnData(value, _columnTypes[i])
+		columnData, err := GetColumnData(value, columnTypes[i])
 		if err != nil {
-			return nil, fmt.Errorf("转化字段数据出错 column Name: %v. column type: %v. %v", _columnNames[i], _columnTypes[i], err)
+			return nil, fmt.Errorf("转化字段数据出错 column Name: %v. column type: %v. %v", columnNames[i], columnTypes[i], err)
 		}
-		rowMap[_columnNames[i]] = columnData
+		rowMap[columnNames[i]] = columnData
 	}
 
 	return rowMap, nil

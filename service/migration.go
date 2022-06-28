@@ -15,9 +15,9 @@ import (
 	"sync"
 )
 
-func StartMigration(_parser *parser.RunParser) {
+func StartMigration(runParser *parser.RunParser) {
 	// 获取配置映射信息
-	configMap, err := config.NewConfigMap(_parser.TaskUUID)
+	configMap, err := config.NewConfigMap(runParser.TaskUUID)
 	if err != nil {
 		logger.M.Fatal(err)
 	}
@@ -39,14 +39,14 @@ func StartMigration(_parser *parser.RunParser) {
 	}
 
 	// 如果没有设置binglog开始位点则show master status 找
-	if _parser.StartLogFile == "" || _parser.StartLogPos < 0 {
-		if err := _parser.SetStartBinlogInfoByHostAndPort(configMap.Source.Host.String, int(configMap.Source.Port.Int64)); err != nil {
+	if runParser.StartLogFile == "" || runParser.StartLogPos < 0 {
+		if err := runParser.SetStartBinlogInfoByHostAndPort(configMap.Source.Host.String, int(configMap.Source.Port.Int64)); err != nil {
 			logger.M.Fatalf("实时获取主库 位点信息出错. %v, 退出迁移", err.Error())
 		}
 	}
 
 	// 保存binglog开始位点
-	if err := new(dao.SourceDao).UpdateStartLogPosInfo(_parser.TaskUUID, _parser.StartLogFile, _parser.StartLogPos); err != nil {
+	if err := new(dao.SourceDao).UpdateStartLogPosInfo(runParser.TaskUUID, runParser.StartLogFile, runParser.StartLogPos); err != nil {
 		logger.M.Fatalf("迁移启动保存位点信息出错 %v", err)
 	}
 
@@ -68,16 +68,16 @@ func StartMigration(_parser *parser.RunParser) {
 
 	wg := new(sync.WaitGroup)
 	// 开启了 checksum功能, 需要进行checksum
-	if _parser.EnableChecksum {
+	if runParser.EnableChecksum {
 		wg.Add(1)
-		go StartChecksum(_parser, configMap, wg, rowCopy2CheksumChan, notifySecondChecksum)
+		go StartChecksum(runParser, configMap, wg, rowCopy2CheksumChan, notifySecondChecksum)
 	} else {
 		logger.M.Warn("没有指定checksum, 本次迁移将不会进行数据校验")
 	}
 
 	// 开始进行 row copy
-	if _parser.EnableRowCopy {
-		err = StartRowCopy(_parser, configMap, rowCopy2CheksumChan, notifySecondChecksum)
+	if runParser.EnableRowCopy {
+		err = StartRowCopy(runParser, configMap, rowCopy2CheksumChan, notifySecondChecksum)
 		if err != nil {
 			logger.M.Fatal(err)
 		}
@@ -86,8 +86,8 @@ func StartMigration(_parser *parser.RunParser) {
 	}
 
 	// 开始应用binlog
-	if _parser.EnableApplyBinlog {
-		err = StartApplyBinlog(_parser, configMap)
+	if runParser.EnableApplyBinlog {
+		err = StartApplyBinlog(runParser, configMap)
 		if err != nil {
 			logger.M.Fatal(err)
 		}

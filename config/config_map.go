@@ -13,10 +13,11 @@ type ConfigMap struct {
 	Source *model.Source // 源数据库
 	Target *model.Target // 目标数据库
 
-	SchemaMapMap    map[string]*model.SchemaMap    // 数据库映射信息, key为源数据库名称
-	TableMapMap     map[string]*model.TableMap     // 数据库表映射信息, key 为 源数据库的 schema.table
-	ColumnMapMap    map[string]*model.ColumnMap    // 数据库字段映射信息, key 为 源数据库的 schema.table.column
-	IgnoreColumnMap map[string]*model.IgnoreColumn // 不需要同步的列
+	SchemaMapMap                       map[string]*model.SchemaMap                       // 数据库映射信息, key为源数据库名称
+	TableMapMap                        map[string]*model.TableMap                        // 数据库表映射信息, key 为 源数据库的 schema.table
+	ColumnMapMap                       map[string]*model.ColumnMap                       // 数据库字段映射信息, key 为 源数据库的 schema.table.column
+	IgnoreColumnMap                    map[string]*model.IgnoreColumn                    // 不需要同步的列
+	BinlogDeleteWhereExternalColumnMap map[string]*model.BinlogDeleteWhereExternalColumn // 消费 binlog WHERE 条件而外需要添加的字段
 
 	RunQuota *model.Task // 获取运行任务的参数
 }
@@ -172,6 +173,20 @@ func (this *ConfigMap) InitIgnoreColumnMap() error {
 	return nil
 }
 
+// 设置 column 映射信息
+func (this *ConfigMap) InitBinlogDeleteWhereExternalMap() error {
+	binlogDeleteWhereExternalColumnDao := new(dao.BinlogDeleteWhereExternalColumnDao)
+
+	externalColumns, err := binlogDeleteWhereExternalColumnDao.FindByTaskUUID(this.TaskUUID, "*")
+	if err != nil {
+		return err
+	}
+
+	this.BinlogDeleteWhereExternalColumnMap = MakeBinlogDeleteWhereExternalColumnMap(externalColumns)
+
+	return nil
+}
+
 /* 通过指定的表名, 获取不需要迁移的列名
 Params:
     _schemaName: 哪个数据库
@@ -197,9 +212,9 @@ Params:
     _taskUUID: 任务的UUID
 */
 
-func NewConfigMap(_taskUUID string) (*ConfigMap, error) {
+func NewConfigMap(taskUUID string) (*ConfigMap, error) {
 	configMap := new(ConfigMap)
-	configMap.TaskUUID = _taskUUID
+	configMap.TaskUUID = taskUUID
 
 	// 判断任务是否存在
 	exists, err := configMap.TaskExists()
@@ -207,60 +222,58 @@ func NewConfigMap(_taskUUID string) (*ConfigMap, error) {
 		return nil, err
 	}
 	if !exists {
-		return nil, fmt.Errorf("在任务中没有找到指定的任务, Task UUID: %v", _taskUUID)
+		return nil, fmt.Errorf("在任务中没有找到指定的任务, Task UUID: %v", taskUUID)
 	}
 
 	// 判断 有没有需要迁移的 schema
 	exists = configMap.SchemaMapExists()
 	if !exists {
-		return nil, fmt.Errorf("在任务中没有需要迁移的 schema, Task UUID: %v", _taskUUID)
+		return nil, fmt.Errorf("在任务中没有需要迁移的 schema, Task UUID: %v", taskUUID)
 	}
 
 	// 判断 有没有需要迁移的 Table
 	exists = configMap.TableMapExists()
 	if !exists {
-		return nil, fmt.Errorf("在任务中没有需要迁移的 table, Task UUID: %v", _taskUUID)
+		return nil, fmt.Errorf("在任务中没有需要迁移的 table, Task UUID: %v", taskUUID)
 	}
 
 	// 获取源实例信息
-	err = configMap.InitSource()
-	if err != nil {
+	if err = configMap.InitSource(); err != nil {
 		return nil, err
 	}
 
 	// 获取目标实例信息
-	err = configMap.InitTarget()
-	if err != nil {
+	if err = configMap.InitTarget(); err != nil {
 		return nil, err
 	}
 
 	// 获取 默认运行参数
-	err = configMap.InitRunQuota()
-	if err != nil {
+	if err = configMap.InitRunQuota(); err != nil {
 		return nil, err
 	}
 
 	// 获取 需要迁移的 schema
-	err = configMap.InitSchemaMapMap()
-	if err != nil {
+	if err = configMap.InitSchemaMapMap(); err != nil {
 		return nil, err
 	}
 
 	// 获取需要迁移的 table
-	err = configMap.InitTableMapMap()
-	if err != nil {
+	if err = configMap.InitTableMapMap(); err != nil {
 		return nil, err
 	}
 
 	// 获取需要迁移的 column
-	err = configMap.InitColumnMapMap()
-	if err != nil {
+	if err := configMap.InitColumnMapMap(); err != nil {
 		return nil, err
 	}
 
 	// 设置不需要迁移的列
-	err = configMap.InitIgnoreColumnMap()
-	if err != nil {
+	if err := configMap.InitIgnoreColumnMap(); err != nil {
+		return nil, err
+	}
+
+	// 设置需要迁移的 binlog delete where条件额外的字段
+	if err := configMap.InitBinlogDeleteWhereExternalMap(); err != nil {
 		return nil, err
 	}
 

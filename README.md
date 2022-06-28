@@ -56,6 +56,17 @@ INSERT INTO d_bus.table_map VALUES
  'employees', -- 目标数据库的表名
  0, -- 该表的row copy是否完成
  NULL, NULL, NOW(), NOW());
+
+-- 消费binlog delete 事件where条件额外需要的字段
+INSERT INTO d_bus.binlog_delete_where_external_column VALUES
+(NULL, '20180204151900nb6VqFhl',
+ 'employees', -- 源数据库名
+ 'employees_bak', -- 源表
+ 'first_name', -- 源字段
+ 'first_name', -- 目标对应字段
+ NOW(), NOW());
+
+
 ```
 
 2. 运行命令

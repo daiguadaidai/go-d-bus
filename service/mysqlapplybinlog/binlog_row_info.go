@@ -73,15 +73,33 @@ func (this *BinlogRowInfo) GetChanSlotByAfter(_columnIndexes []int, _paraller in
 
 /* 获取 前镜像
 Params:
-	_columnIndexies: 相关索引信息
+	columnIndexies: 相关索引信息
 */
 func (this *BinlogRowInfo) GetBeforeRow(columnIndeies []int) []interface{} {
 	cvtRow := common.ConverSQLType(this.Before)
 
-	row := make([]interface{}, len(columnIndeies))
-	for i, valueIndex := range columnIndeies {
-		row[i] = cvtRow[valueIndex]
-		row[i] = this.Before[valueIndex]
+	row := make([]interface{}, 0, len(columnIndeies))
+	for _, valueIndex := range columnIndeies {
+		row = append(row, cvtRow[valueIndex])
+	}
+
+	return row
+}
+
+/* 获取 前镜像
+Params:
+	columnIndexies: 相关索引信息
+*/
+func (this *BinlogRowInfo) GetDeleteBeforeRow(columnIndeies []int, externalIndexies []int) []interface{} {
+	cvtRow := common.ConverSQLType(this.Before)
+
+	row := make([]interface{}, 0, len(columnIndeies)+len(externalIndexies))
+	for _, valueIndex := range columnIndeies {
+		row = append(row, cvtRow[valueIndex])
+	}
+
+	for _, valueIndex := range externalIndexies {
+		row = append(row, cvtRow[valueIndex])
 	}
 
 	return row

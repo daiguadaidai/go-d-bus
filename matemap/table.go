@@ -4,22 +4,27 @@ import (
 	"fmt"
 	"github.com/daiguadaidai/go-d-bus/common"
 	"github.com/daiguadaidai/go-d-bus/logger"
+	"strings"
 )
 
 type Table struct {
-	SourceSchema         string         // 源 数据库名
-	SourceName           string         // 源 表名
-	SourceColumns        []Column       // 源 所有的列
-	SourcePKColumns      []int          // 源 主键, 没有主键的话就用第一个唯一键
-	SourceAllUKColumns   []int          // 原 所有的唯一键字段, 最终不重复
-	SourceColumnIndexMap map[string]int // 列名和 sourceColumns index 的映射, key:列名, value: 列所在的位置
+	SourceSchema                           string         // 源 数据库名
+	SourceName                             string         // 源 表名
+	SourceColumns                          []Column       // 源 所有的列
+	SourcePKColumns                        []int          // 源 主键, 没有主键的话就用第一个唯一键
+	SourceAllUKColumns                     []int          // 原 所有的唯一键字段, 最终不重复
+	SourceColumnIndexMap                   map[string]int // 列名和 sourceColumns index 的映射, key:列名, value: 列所在的位置
+	SourceBinlogDeleteWhereExternalColumns []int          // 消费Binlog Delete Where 条件额外需要的字段 所在位置
 
-	TargetSchema         string         // 目标 数据库名
-	TargetName           string         // 目标 表名
-	TargetColumns        []Column       // 目标所有的列
-	TargetPKColumns      []int          // 目标 主键, 没有主键就使用第一个唯一键
-	TargetAllUKColumns   []int          // 目标 所有的唯一键字段, 最终不重复
-	TargetColumnIndexMap map[string]int // 列名和 TargetColumn index 的映射
+	BinlogDeleteWhereExternalColumns []Column // 消费Binlog Delete Where 条件额外需要的字段, 字段名称是目标表的字段名
+
+	TargetSchema                           string         // 目标 数据库名
+	TargetName                             string         // 目标 表名
+	TargetColumns                          []Column       // 目标所有的列
+	TargetPKColumns                        []int          // 目标 主键, 没有主键就使用第一个唯一键
+	TargetAllUKColumns                     []int          // 目标 所有的唯一键字段, 最终不重复
+	TargetColumnIndexMap                   map[string]int // 列名和 TargetColumn index 的映射
+	TargetBinlogDeleteWhereExternalColumns []int          // mubio 消费Binlog Delete Where 条件额外需要的字段 所在位置
 
 	SourceToTargetColumnNameMap map[string]string // 源端列明映射到目标端的列明
 	TargetToSourceColumnNameMap map[string]string // 目标端列明映射到源端的列明
@@ -205,12 +210,12 @@ func (this *Table) InitSourceUsefulColumns() {
 Params:
     _pkColumns: 可用打 (主键/唯一键) 列名
 */
-func (this *Table) InitSourcePKColumns(_pkColumnNames []string) {
+func (this *Table) InitSourcePKColumns(pkColumnNames []string) {
 	if this.SourcePKColumns == nil {
-		this.SourcePKColumns = make([]int, 0, len(_pkColumnNames))
+		this.SourcePKColumns = make([]int, 0, len(pkColumnNames))
 	}
 
-	for _, pkColumnName := range _pkColumnNames {
+	for _, pkColumnName := range pkColumnNames {
 		sourcePKColumnIndex := this.SourceColumnIndexMap[pkColumnName]
 		this.SourcePKColumns = append(this.SourcePKColumns, sourcePKColumnIndex)
 	}
@@ -542,7 +547,7 @@ func (this *Table) InitUpdSqlTpl() {
 
 // delete sql 模板
 func (this *Table) InitDelSqlTpl() {
-	deleteSql := "/* go-d-bus */ DELETE FROM %v WHERE (%v) = (%v)"
+	deleteSql := "/* go-d-bus */ DELETE FROM %v WHERE (%v) = (%v) %v"
 
 	// 获取 目标表名
 	tableName := common.FormatTableName(this.TargetSchema, this.TargetName, "`")
@@ -554,7 +559,14 @@ func (this *Table) InitDelSqlTpl() {
 	// 获取 Where 中需要的值的占位符
 	wherePlaceholderStr := common.CreateDebugPlaceholderByCount(len(targetPKColumnNames))
 
-	this.delSqlTpl = fmt.Sprintf(deleteSql, tableName, pkFieldsStr, wherePlaceholderStr)
+	// 获取而外的字段条件
+	var externalWhere string
+	if len(this.BinlogDeleteWhereExternalColumns) > 0 {
+		externalWhereStrs := this.GetBinlogDeleteWhereExternalStr()
+		externalWhere = fmt.Sprintf("AND %v", strings.Join(externalWhereStrs, " AND "))
+	}
+
+	this.delSqlTpl = fmt.Sprintf(deleteSql, tableName, pkFieldsStr, wherePlaceholderStr, externalWhere)
 }
 
 /* 初始化源 单行数据 checksum sql 模板
@@ -709,6 +721,54 @@ func (this *Table) InitSelSourceRowSqlTpl() {
 	wherePlaceholderStr := common.CreatePlaceholderByCount(len(pkColumnNames))
 
 	this.selSourceRowSqlTpl = fmt.Sprintf(selectSql, fieldsStr, tableName, pkFieldsStr, wherePlaceholderStr)
+}
+
+func (this *Table) InitSourceBinlogDeleteWhereExternalColumns() error {
+	if len(this.BinlogDeleteWhereExternalColumns) == 0 {
+		return nil
+	}
+
+	sourceExternalColumns := make([]int, 0, len(this.BinlogDeleteWhereExternalColumns))
+	for _, externalColumn := range this.BinlogDeleteWhereExternalColumns {
+		// 通过目标表的字段名称获取 原表的字段名称
+		sourceExternalColumnName, ok := this.TargetToSourceColumnNameMap[externalColumn.Name]
+		if !ok {
+			return fmt.Errorf("通过binlog delete where额外字段获取原表字段失败, 目标字段: %v 找不到原表字段名", externalColumn.Name)
+		}
+
+		// 通过原表字段找到原表字段位置
+		sourceExternalColumnIndex, ok := this.SourceColumnIndexMap[sourceExternalColumnName]
+		if !ok {
+			return fmt.Errorf("通过binlog delete where额外字段获取原表字段失败,  原表字段: %v 找不到对应位置, 目标字段: %v,", sourceExternalColumnName, externalColumn.Name)
+		}
+
+		sourceExternalColumns = append(sourceExternalColumns, sourceExternalColumnIndex)
+	}
+
+	this.SourceBinlogDeleteWhereExternalColumns = sourceExternalColumns
+
+	return nil
+}
+
+func (this *Table) InitTargetBinlogDeleteWhereExternalColumns() error {
+	if len(this.BinlogDeleteWhereExternalColumns) == 0 {
+		return nil
+	}
+
+	targetExternalColumns := make([]int, 0, len(this.BinlogDeleteWhereExternalColumns))
+	for _, externalColumn := range this.BinlogDeleteWhereExternalColumns {
+		// 通过目标表字段找到原表字段位置
+		targetExternalColumnIndex, ok := this.TargetColumnIndexMap[externalColumn.Name]
+		if !ok {
+			return fmt.Errorf("通过binlog delete where额外字段获取原表字段失败,  目标字段: %v 找不到对应位置", externalColumn.Name)
+		}
+
+		targetExternalColumns = append(targetExternalColumns, targetExternalColumnIndex)
+	}
+
+	this.TargetBinlogDeleteWhereExternalColumns = targetExternalColumns
+
+	return nil
 }
 
 // 获得创建目标表语句
@@ -870,4 +930,16 @@ func (this *Table) FindSourcePKColumnGoTypeMap() map[string]int {
 	}
 
 	return pkColumnsTypeMap
+}
+
+func (this *Table) GetBinlogDeleteWhereExternalStr() []string {
+	whereStrs := make([]string, 0, len(this.BinlogDeleteWhereExternalColumns))
+
+	for _, column := range this.BinlogDeleteWhereExternalColumns {
+		whereStr := fmt.Sprintf("`%v` = %v", column.Name, "%#v")
+
+		whereStrs = append(whereStrs, whereStr)
+	}
+
+	return whereStrs
 }

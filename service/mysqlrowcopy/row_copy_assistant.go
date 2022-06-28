@@ -48,17 +48,12 @@ func (this *RowCopy) GetMaxPrimaryRangeValueMap() (map[string]*matemap.PrimaryRa
 		if tableMap, ok := this.ConfigMap.TableMapMap[tableName]; ok {
 			// 该表没有 截止row copy id值的数据, 从数据库中获取
 			if !tableMap.MaxIDValue.Valid || strings.TrimSpace(tableMap.MaxIDValue.String) == "" {
-				maxPrimaryMap, err := GetTableLastPrimaryMap(
-					this.ConfigMap.Source.Host.String,
-					int(this.ConfigMap.Source.Port.Int64),
-					tableMap.Schema.String,
-					tableMap.Source.String,
-				)
+				maxPrimaryMap, err := GetTableLastPrimaryMap(this.ConfigMap.Source.Host.String, int(this.ConfigMap.Source.Port.Int64), tableMap.Schema.String, tableMap.Source.String)
 				if err != nil {
 					return nil, nil, fmt.Errorf("失败. 初始化表:%v row copy截止id值. %v", tableName, err)
 				}
 				// 该表没有数据, 不处理, 进行下一个表的row copy 截止ID处理
-				if len(maxPrimaryMap) < 1 {
+				if len(maxPrimaryMap) == 1 {
 					noDataTables[tableName] = true
 					logger.M.Warnf("警告. 该表没有数据, 无法获取到最大主键值. 将设置为row copy 完成. %v", tableName)
 					continue

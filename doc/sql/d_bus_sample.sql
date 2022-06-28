@@ -3,6 +3,7 @@ truncate table d_bus.source;
 truncate table d_bus.target;
 truncate table d_bus.schema_map;
 truncate table d_bus.table_map;
+truncate table d_bus.binlog_delete_where_external_column;
 
 INSERT INTO d_bus.task VALUES
 (NULL, '20180204151900nb6VqFhl', 1, '迁移测试', 'dbmonitor', 'heartbeat_table', NULL, 4, 0, NOW(), NOW(), 100, NULL, 0, 20000, 4000, NULL, 4, 4, 1, 1);
@@ -13,3 +14,5 @@ INSERT INTO d_bus.target VALUES
 INSERT INTO d_bus.schema_map VALUES(NULL, '20180204151900nb6VqFhl', 'employees', 'test', NOW(), NOW());
 INSERT INTO d_bus.table_map VALUES
 (NULL, '20180204151900nb6VqFhl', 'employees', 'employees_bak', 'employees', 0, NULL, NULL, NOW(), NOW());
+INSERT INTO d_bus.binlog_delete_where_external_column VALUES
+(NULL, '20180204151900nb6VqFhl', 'employees', 'employees_bak', 'first_name', 'first_name', NOW(), NOW());

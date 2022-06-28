@@ -2,6 +2,7 @@ package common
 
 import (
 	"bytes"
+	"fmt"
 	"testing"
 )
 
@@ -118,4 +119,31 @@ func TestBytes2Float(t *testing.T) {
 	if f64 != 7.291122019556397e-304 {
 		t.Errorf("bytes 不能转化成 float64, bytes: %v, float64: %v", b64, f64)
 	}
+}
+
+type TmpColumn struct {
+	Name       string   // 字段名字
+	IsSet      bool     // 是否是 集合
+	EnumValues []string // 枚举的值
+}
+
+func TestConvter(t *testing.T) {
+	tmpColumn1 := TmpColumn{
+		Name:       "HH1",
+		IsSet:      true,
+		EnumValues: []string{"a1", "b1"},
+	}
+
+	var tmpColumn2 TmpColumn
+	fmt.Println(tmpColumn1)
+	fmt.Println(tmpColumn2)
+	if err := DeepCopy(&tmpColumn2, tmpColumn1); err != nil {
+		t.Fatalf(err.Error())
+	}
+	fmt.Println(tmpColumn1)
+	fmt.Println(tmpColumn2)
+	tmpColumn2.Name = "HH2"
+	tmpColumn2.EnumValues[0] = "a2"
+	fmt.Println(tmpColumn1)
+	fmt.Println(tmpColumn2)
 }
