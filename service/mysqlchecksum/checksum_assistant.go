@@ -294,7 +294,7 @@ func diffRecord2PrimaryRangeValue(record model.DataChecksum, table *matemap.Tabl
 		return nil, fmt.Errorf("失败. 将最大ID值 JSON -> Map. 生成checksum需要进行fix的记录. %v.%v. min: %v, max: %v. %v",
 			record.SourceSchema.String, record.SourceTable.String, record.MinIDValue.String, record.MinIDValue.String, err)
 	}
-	primaryRangeValue := matemap.NewPrimaryRangeValue("-1", record.SourceSchema.String, record.SourceTable.String, minValue, maxValue)
+	primaryRangeValue := matemap.NewPrimaryRangeValue("-1", record.SourceSchema.String, record.SourceTable.String, minValue, maxValue, nil)
 
 	return primaryRangeValue, nil
 }

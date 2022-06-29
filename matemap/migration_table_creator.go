@@ -598,8 +598,8 @@ func FindSourceDistinctUKColumnNames(host string, port int, schemaName string, t
 如果是全字段迁移直接获取表结构, 并且处理字符串就好
 
 Params:
-    _configMap: 元信息配置文件
-    _table: 需要迁移的表
+    configMap: 元信息配置文件
+    table: 需要迁移的表
 */
 func GetTargetCreateTableSql(configMap *config.ConfigMap, table *Table) (string, error) {
 	var createTableSql string
@@ -719,10 +719,10 @@ func GetCreateTableSql(host string, port int, schemaName string, tableName strin
 
 /* 清除存在的匿名表
 Params:
-    _host: 实例host
-    _port: 实例port
-    _schemaName: 数据库名称
-    _tableName: 表名称
+    host: 实例host
+    port: 实例port
+    schemaName: 数据库名称
+    tableName: 表名称
 */
 func DropTable(host string, port int, schemaName string, tableName string) error {
 	instance, ok := gdbc.GetDynamicDBByHostPort(host, int64(port))
@@ -768,12 +768,12 @@ func CreateTableFromTable(host string, port int, schemaName string, fromName str
 
 /* 获得创建目标表语句
 Params:
-    _host: 实例host
-    _port: 实例port
-    _schemaName: 数据库名称
-    _tableName: 表名
-    _dropColumnNames: 需要删除的字段名称
-    _dropIndexNames: 需要删除的所有名称
+    host: 实例host
+    port: 实例port
+    schemaName: 数据库名称
+    tableName: 表名
+    dropColumnNames: 需要删除的字段名称
+    dropIndexNames: 需要删除的所有名称
 */
 func DropTableColumnAndIndex(host string, port int, schemaName string, tableName string, dropColumnNames []string, dropIndexNames []string) error {
 	// 获取 ALTER TBALE DROP 语句
@@ -797,12 +797,11 @@ func DropTableColumnAndIndex(host string, port int, schemaName string, tableName
 func FindAllMigrationTableNameMap() map[string]*MigrationTableName {
 	migrationTableNameMap := make(map[string]*MigrationTableName)
 
-	migrationTableMap.Range(func(_tableNameInterface, _tableInterface interface{}) bool {
-		table := _tableInterface.(interface{}).(*Table)
-		tableName := _tableNameInterface.(interface{}).(string)
+	migrationTableMap.Range(func(tableNameInterface, tableInterface interface{}) bool {
+		table := tableInterface.(interface{}).(*Table)
+		tableName := tableNameInterface.(interface{}).(string)
 
-		migrationTableName := NewMigrationTableName(table.SourceSchema,
-			table.SourceName, table.TargetSchema, table.TargetName)
+		migrationTableName := NewMigrationTableName(table.SourceSchema, table.SourceName, table.TargetSchema, table.TargetName)
 
 		migrationTableNameMap[tableName] = migrationTableName
 

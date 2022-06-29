@@ -62,10 +62,10 @@ func (this *TableMapDao) UpdateCurrIDValue(taskUUID, schema, table, jsonData str
 
 /* 跟新表row copy 截止的主键值
 Params:
-    _taskUUID: 任务ID
-    _schema: 数据库名
-    _table: 表名
-    _jsonData: 需要更新的数据
+    taskUUID: 任务ID
+    schema: 数据库名
+    table: 表名
+    jsonData: 需要更新的数据
 */
 func (this *TableMapDao) UpdateMaxIDValue(taskUUID, schema, table, jsonData string) int {
 	ormDB := gdbc.GetOrmInstance()

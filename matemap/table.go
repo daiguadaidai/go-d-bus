@@ -37,6 +37,7 @@ type Table struct {
 	selFirstPKSqlTpl          string // 查询第一条记录  主键/唯一键 值 sql 模板
 	selLastPKSqlTpl           string // 查询最后一条记录  主键/唯一键 值 sql 模板
 	selPerBatchMaxPKSqlTpl    string // 每批查询表最大 主键/唯一键 值 sql 模板
+	selCurrAndNextPkSqlTpl    string // 获取当前和下一批主键值sql模板
 	selPerBatchSqlTpl         string // 每批查询获取数据的sql, row copy 所用 sql 模板
 	insIgrBatchSqlTpl         string // insert ignore into 批量 sql 模板
 	repPerBatchSqlTpl         string // replace into 批量 insert 数据 sql 模板
@@ -312,6 +313,9 @@ func (this *Table) InitALLSqlTpl() {
 	// 初始化 每批查询表最大 主键/唯一键 值 sql 模板
 	this.InitSelPerBatchMaxPKSqlTpl()
 
+	// 初始化 获取主键, 本次和下一次值
+	this.InitSelCurrAndNextPKSqlTpl()
+
 	// 每批查询获取数据的sql, row copy 所用 sql 模板
 	this.InitSelPerBatchSqlTpl()
 
@@ -350,8 +354,8 @@ func (this *Table) InitALLSqlTpl() {
 Pramas:
     _targetCreateTableSql: 目标建表sql语句
 */
-func (this *Table) InitTargetCreateTableSql(_targetCreateTableSql string) {
-	this.targetCreateTableSql = _targetCreateTableSql
+func (this *Table) InitTargetCreateTableSql(targetCreateTableSql string) {
+	this.targetCreateTableSql = targetCreateTableSql
 }
 
 // 初始化删除目标表语句 sql
@@ -438,10 +442,34 @@ func (this *Table) InitSelPerBatchMaxPKSqlTpl() {
 		tableName, pkFieldsStr, wherePlaceholderStr, orderByAscStr, limitOffsetValue, orderByDescStr)
 }
 
+// 初始化 每批查询表最大 主键/唯一键 值 sql 模板
+func (this *Table) InitSelCurrAndNextPKSqlTpl() {
+	selectSql := `
+        /* go-d-bus */ SELECT /*!40001 SQL_NO_CACHE */
+            %v
+        FROM %v
+        WHERE (%v) >= (%v)
+        ORDER BY %v
+        LIMIT %v, 2
+    `
+
+	// 获取主键名称
+	pkColumnNames := this.FindSourcePKColumnNames()
+	// 获取 主键字段 字符串
+	pkFieldsStr := common.FormatColumnNameStr(pkColumnNames, "`, `")
+	// 获取 源表名
+	tableName := common.FormatTableName(this.SourceSchema, this.SourceName, "`")
+	// 获取 Where 中需要的值的占位符
+	wherePlaceholderStr := common.CreatePlaceholderByCount(len(pkColumnNames))
+
+	this.selCurrAndNextPkSqlTpl = fmt.Sprintf(selectSql, pkFieldsStr, tableName, pkFieldsStr, wherePlaceholderStr, pkFieldsStr, "%v")
+}
+
 // 每批查询获取数据的sql, row copy 所用 sql 模板
 func (this *Table) InitSelPerBatchSqlTpl() {
 	selectSql := `
-        /* go-d-bus */ SELECT %v
+        /* go-d-bus */ SELECT /*!40001 SQL_NO_CACHE */
+            %v
         FROM %v
         WHERE (%v) >= (%v)
             AND (%v) <= (%v)
@@ -467,7 +495,8 @@ func (this *Table) InitSelPerBatchSqlTpl() {
 // 每批查询获取主键值的sql 模板
 func (this *Table) InitSelPerBatchSourcePKSqlTpl() {
 	selectSql := `
-        /* go-d-bus */ SELECT %v
+        /* go-d-bus */ SELECT /*!40001 SQL_NO_CACHE */
+            %v
         FROM %v
         WHERE (%v) >= (%v)
             AND (%v) <= (%v)
@@ -490,7 +519,7 @@ func (this *Table) InitSelPerBatchSourcePKSqlTpl() {
 
 // 初始化 insert ignore into 批量 sql 模板
 func (this *Table) InitInsIgrBatchSqlTpl() {
-	insIgrSql := `/* go-d-bus */ INSERT IGNORE INTO %v(%v) VALUES %v`
+	insIgrSql := `/* go-d-bus */ INSERT LOW_PRIORITY IGNORE INTO %v(%v) VALUES %v`
 
 	// 获取 目标表名
 	tableName := common.FormatTableName(this.TargetSchema, this.TargetName, "`")
@@ -506,7 +535,7 @@ func (this *Table) InitInsIgrBatchSqlTpl() {
 
 // 初始化 replace into 批量 insert 数据 sql 模板
 func (this *Table) InitRepPerBatchSqlTpl() {
-	replaceSql := `/* go-d-bus */ REPLACE INTO %v(%v) VALUES %v`
+	replaceSql := `/* go-d-bus */ REPLACE LOW_PRIORITY INTO %v(%v) VALUES %v`
 
 	// 获取 目标表名
 	tableName := common.FormatTableName(this.TargetSchema, this.TargetName, "`")
@@ -523,7 +552,7 @@ func (this *Table) InitRepPerBatchSqlTpl() {
 // update sql 模板
 func (this *Table) InitUpdSqlTpl() {
 	updateSql := `
-        /* go-d-bus */ UPDATE %v
+        /* go-d-bus */ UPDATE LOW_PRIORITY %v
         SET %v
         WHERE (%v) = (%v)
     `
@@ -547,7 +576,7 @@ func (this *Table) InitUpdSqlTpl() {
 
 // delete sql 模板
 func (this *Table) InitDelSqlTpl() {
-	deleteSql := "/* go-d-bus */ DELETE FROM %v WHERE (%v) = (%v) %v"
+	deleteSql := "/* go-d-bus */ DELETE LOW_PRIORITY FROM %v WHERE (%v) = (%v) %v"
 
 	// 获取 目标表名
 	tableName := common.FormatTableName(this.TargetSchema, this.TargetName, "`")
@@ -581,7 +610,8 @@ WHERE id = xxx
 */
 func (this *Table) InitSelSourceRowChecksumSqlTpl() {
 	selectSql := `
-        /* go-d-bus checksum row source */ SELECT CRC32(CONCAT(
+        /* go-d-bus checksum row source */ SELECT /*!40001 SQL_NO_CACHE */
+        CRC32(CONCAT(
             %v
         ))
         FROM %v
@@ -609,7 +639,8 @@ func (this *Table) InitSelSourceRowChecksumSqlTpl() {
 // 处理方式和 InitSourceRowChecksumTpl 一样
 func (this *Table) InitSelTargetRowChecksumSqlTpl() {
 	selectSql := `
-        /* go-d-bus checksum row target */ SELECT CRC32(CONCAT(
+        /* go-d-bus checksum row target */ SELECT /*!40001 SQL_NO_CACHE */
+        CRC32(CONCAT(
             %v
         ))
         FROM %v
@@ -645,7 +676,8 @@ WHERE id = xxx
 */
 func (this *Table) InitSelSourceRowsChecksumSqlTpl() {
 	selectSql := `
-        /* go-d-bus checksum rows source */ SELECT SUM(CRC32(CONCAT(
+        /* go-d-bus checksum rows source */ SELECT /*!40001 SQL_NO_CACHE */
+        SUM(CRC32(CONCAT(
             %v
         )))
         FROM %v
@@ -675,7 +707,8 @@ func (this *Table) InitSelSourceRowsChecksumSqlTpl() {
 // 处理方式和 InitSourceRowsChecksumTpl 一样
 func (this *Table) InitSelTargetRowsChecksumSqlTpl() {
 	selectSql := `
-        /* go-d-bus checksum row target */ SELECT SUM(CRC32(CONCAT(
+        /* go-d-bus checksum row target */ SELECT /*!40001 SQL_NO_CACHE */
+        SUM(CRC32(CONCAT(
             %v
         )))
         FROM %v
@@ -702,7 +735,7 @@ func (this *Table) InitSelTargetRowsChecksumSqlTpl() {
 // 初始化 通过主键值获取源表数据 sql 模板
 func (this *Table) InitSelSourceRowSqlTpl() {
 	selectSql := `
-        /* go-d-bus */ SELECT %v
+        /* go-d-bus */ SELECT /*!40001 SQL_NO_CACHE */ %v
         FROM %v
         WHERE (%v) = (%v)
     `
@@ -795,8 +828,16 @@ func (this *Table) GetSelLastPKSqlTpl() string {
 Params:
     _maxRows: 查询的最大行数
 */
-func (this *Table) GetSelPerBatchMaxPKSqlTpl(_maxRows int) string {
-	return fmt.Sprintf(this.selPerBatchMaxPKSqlTpl, _maxRows)
+func (this *Table) GetSelPerBatchMaxPKSqlTpl(maxRows int) string {
+	return fmt.Sprintf(this.selPerBatchMaxPKSqlTpl, maxRows)
+}
+
+/* 获取每一次当前和下一次的主键值
+Params:
+    maxRows: 查询的最大行数
+*/
+func (this *Table) GetSelCurrAndNextPKSqlTpl(maxRows int) string {
+	return fmt.Sprintf(this.selCurrAndNextPkSqlTpl, maxRows)
 }
 
 // 获取 每一批 select的数据 sql

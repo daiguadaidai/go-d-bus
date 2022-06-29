@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/daiguadaidai/go-d-bus/common"
 	"github.com/daiguadaidai/go-d-bus/dao"
+	"github.com/daiguadaidai/go-d-bus/dao/daohelper"
 	"github.com/daiguadaidai/go-d-bus/gdbc"
 	"github.com/daiguadaidai/go-d-bus/logger"
 	"github.com/daiguadaidai/go-d-bus/matemap"
@@ -53,7 +54,7 @@ func (this *RowCopy) GetMaxPrimaryRangeValueMap() (map[string]*matemap.PrimaryRa
 					return nil, nil, fmt.Errorf("失败. 初始化表:%v row copy截止id值. %v", tableName, err)
 				}
 				// 该表没有数据, 不处理, 进行下一个表的row copy 截止ID处理
-				if len(maxPrimaryMap) == 1 {
+				if len(maxPrimaryMap) == 0 {
 					noDataTables[tableName] = true
 					logger.M.Warnf("警告. 该表没有数据, 无法获取到最大主键值. 将设置为row copy 完成. %v", tableName)
 					continue
@@ -64,13 +65,12 @@ func (this *RowCopy) GetMaxPrimaryRangeValueMap() (map[string]*matemap.PrimaryRa
 				if err != nil {
 					return nil, nil, fmt.Errorf("失败. 初始化row copy截止id值. map转化成json. %v %v. %v", tableName, maxPrimaryMap, err)
 				}
-				affected := UpdateTableMaxPrimaryValue(this.ConfigMap.TaskUUID, tableMap.Schema.String,
-					tableMap.Source.String, maxPrimaryJson)
+				affected := UpdateTableMaxPrimaryValue(this.ConfigMap.TaskUUID, tableMap.Schema.String, tableMap.Source.String, maxPrimaryJson)
 				if affected < 1 { // 数据没有更新成功
 					return nil, nil, fmt.Errorf("失败. 初始化表row copy截止主键值, 保存到数据库中 %v", tableName)
 				}
 
-				maxPrimaryRangeValueMap[tableName] = matemap.NewPrimaryRangeValue("-1", tableMap.Schema.String, tableMap.Source.String, maxPrimaryMap, maxPrimaryMap)
+				maxPrimaryRangeValueMap[tableName] = matemap.NewPrimaryRangeValue("-1", tableMap.Schema.String, tableMap.Source.String, maxPrimaryMap, maxPrimaryMap, maxPrimaryMap)
 
 				logger.M.Infof("成功. 初始化row copy 最大主键值. 并保存到数据库中. %v", tableName)
 			} else { // 在 table_map 表中已经有 row copy 截止主键值 max_id_value
@@ -85,7 +85,7 @@ func (this *RowCopy) GetMaxPrimaryRangeValueMap() (map[string]*matemap.PrimaryRa
 					return nil, nil, fmt.Errorf("失败. 初始化表: %v row copy 截止id值. json转化map. %v", tableName, err)
 				}
 
-				maxPrimaryRangeValueMap[tableName] = matemap.NewPrimaryRangeValue("-1", tableMap.Schema.String, tableMap.Source.String, maxPrimaryMap, maxPrimaryMap)
+				maxPrimaryRangeValueMap[tableName] = matemap.NewPrimaryRangeValue("-1", tableMap.Schema.String, tableMap.Source.String, maxPrimaryMap, maxPrimaryMap, maxPrimaryMap)
 
 				logger.M.Infof("成功. 初始化row copy 最大主键值. 之前已经初始化过. %v", tableName)
 			}
@@ -98,8 +98,7 @@ func (this *RowCopy) GetMaxPrimaryRangeValueMap() (map[string]*matemap.PrimaryRa
 }
 
 // 获取需要迁移的表 当前row copy到的进度 id范围值
-func (this *RowCopy) GetCurrentPrimaryRangeValueMap() (map[string]*matemap.PrimaryRangeValue,
-	map[string]bool, error) {
+func (this *RowCopy) GetCurrentPrimaryRangeValueMap() (map[string]*matemap.PrimaryRangeValue, map[string]bool, error) {
 
 	currentPrimaryRangeValueMap := make(map[string]*matemap.PrimaryRangeValue)
 	noDataTables := make(map[string]bool) // 没有数据的表, 代表已经完成
@@ -133,7 +132,7 @@ func (this *RowCopy) GetCurrentPrimaryRangeValueMap() (map[string]*matemap.Prima
 				}
 
 				// 生成但前已经rowcopy 到的范围
-				currentPrimaryRangeValueMap[tableName] = matemap.NewPrimaryRangeValue("-1", tableMap.Schema.String, tableMap.Source.String, currPrimaryMap, currPrimaryMap)
+				currentPrimaryRangeValueMap[tableName] = matemap.NewPrimaryRangeValue("-1", tableMap.Schema.String, tableMap.Source.String, currPrimaryMap, currPrimaryMap, currPrimaryMap)
 
 				logger.M.Infof("成功. 初始化当前row copy主键值. 并保存到数据库中. %v", tableName)
 			} else { // 在 table_map 表中已经有当前已经完成的 row copy 主键值 curr_min_value
@@ -149,7 +148,7 @@ func (this *RowCopy) GetCurrentPrimaryRangeValueMap() (map[string]*matemap.Prima
 				}
 
 				// 生成但前已经rowcopy 到的范围
-				currentPrimaryRangeValueMap[tableName] = matemap.NewPrimaryRangeValue("-1", tableMap.Schema.String, tableMap.Source.String, currPrimaryMap, currPrimaryMap)
+				currentPrimaryRangeValueMap[tableName] = matemap.NewPrimaryRangeValue("-1", tableMap.Schema.String, tableMap.Source.String, currPrimaryMap, currPrimaryMap, currPrimaryMap)
 
 				logger.M.Infof("成功. 初始化当前row copy主键值. 数据库中已经有. %v", tableName)
 			}
@@ -163,10 +162,10 @@ func (this *RowCopy) GetCurrentPrimaryRangeValueMap() (map[string]*matemap.Prima
 
 /* 获取指定表的第一条记录的 ID 值 map
 Params:
-    _host: 实例 host
-    _port:  实例 port
-    _schema: 数据库
-    _table: 表
+    host: 实例 host
+    port:  实例 port
+    schema: 数据库
+    table: 表
 */
 func GetTableFirstPrimaryMap(host string, port int, schema string, table string) (map[string]interface{}, error) {
 
@@ -184,7 +183,7 @@ func GetTableFirstPrimaryMap(host string, port int, schema string, table string)
 	logger.M.Debugf("%v, %v, %v", migrationTable.SourceName, migrationTable.FindSourcePKColumnNames(), migrationTable.FindSourcePKColumnTypes())
 
 	row := instance.QueryRow(selectSql)
-	firstPrimaryMap, err := common.Row2Map(row, migrationTable.FindSourcePKColumnNames(), migrationTable.FindSourcePKColumnTypes())
+	firstPrimaryMap, err := daohelper.Row2Map(row, migrationTable.FindSourcePKColumnNames(), migrationTable.FindSourcePKColumnTypes())
 	if err != nil {
 		return nil, err
 	}
@@ -194,10 +193,10 @@ func GetTableFirstPrimaryMap(host string, port int, schema string, table string)
 
 /* 获取指定表的最大记录的 ID 值 map
 Params:
-    _host: 实例 host
-    _port:  实例 port
-    _schema: 数据库
-    _table: 表
+    host: 实例 host
+    port:  实例 port
+    schema: 数据库
+    table: 表
 */
 func GetTableLastPrimaryMap(host string, port int, schema string, table string) (map[string]interface{}, error) {
 	migrationTable, err := matemap.GetMigrationTableBySchemaTable(schema, table)
@@ -213,7 +212,7 @@ func GetTableLastPrimaryMap(host string, port int, schema string, table string) 
 	selectSql := migrationTable.GetSelLastPKSqlTpl() // 获取查询表最后一条数据的记录 SQL
 
 	row := instance.QueryRow(selectSql)
-	lastPrimaryMap, err := common.Row2Map(row, migrationTable.FindSourcePKColumnNames(), migrationTable.FindSourcePKColumnTypes())
+	lastPrimaryMap, err := daohelper.Row2Map(row, migrationTable.FindSourcePKColumnNames(), migrationTable.FindSourcePKColumnTypes())
 	if err != nil {
 		return nil, err
 	}
@@ -274,9 +273,9 @@ Params:
     _table: 表名
     _jsonData: 需要更新的数据
 */
-func UpdateTableMaxPrimaryValue(_taskUUID, _schema, _table, _jsonData string) int {
+func UpdateTableMaxPrimaryValue(taskUUID, schema, table, jsonData string) int {
 	tableMapDao := new(dao.TableMapDao)
-	affected := tableMapDao.UpdateMaxIDValue(_taskUUID, _schema, _table, _jsonData)
+	affected := tableMapDao.UpdateMaxIDValue(taskUUID, schema, table, jsonData)
 	return affected
 }
 

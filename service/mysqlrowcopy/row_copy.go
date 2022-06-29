@@ -84,7 +84,7 @@ Params
 	_toChecksumChan: row copy 完成通知 checksum 的 checksum chan
 */
 func NewRowCopy(
-	parser *parser.RunParser,
+	runParser *parser.RunParser,
 	configMap *config.ConfigMap,
 	toChecksumChan chan *matemap.PrimaryRangeValue,
 	notifySecondChecksum chan bool,
@@ -94,7 +94,7 @@ func NewRowCopy(
 
 	// 初始化配置控制信息
 	rowCopy.ConfigMap = configMap
-	rowCopy.Parser = parser
+	rowCopy.Parser = runParser
 	rowCopy.RowCopyComsumerCount = atomic.NewInt64(0)
 
 	// 初始化 需要迁移的表名映射信息
@@ -102,7 +102,7 @@ func NewRowCopy(
 	logger.M.Info("成功. 初始化 row copy 所有迁移的表名. 包含了可以不用迁移的")
 
 	// 初始化 传输表的 主键 范围值
-	rowCopy.PrimaryRangeValueChan = make(chan *matemap.PrimaryRangeValue, parser.RowCopyHighWaterMark)
+	rowCopy.PrimaryRangeValueChan = make(chan *matemap.PrimaryRangeValue, runParser.RowCopyHighWaterMark)
 	logger.M.Info("成功. 初始化传输 row copy 主键值的 通道")
 
 	// 获取 还需要生成主键范围数据的表 map: {"schema.table": true}
@@ -142,13 +142,14 @@ func NewRowCopy(
 	for key, value := range rowCopy.CurrentPrimaryRangeValueMap {
 		rowCopy.CompletePrimaryRangeValueMap.Store(key, value)
 	}
-	logger.M.Infof("成功. 初始化已经完成的")
+	logger.M.Infof("成功. 初始化需要迁移的表已经完成row copy进度信息")
 
 	// 初始化 cache row copy 的主键
 	rowCopy.WaitingTagCompletePrirmaryRangeValueMap = make(map[string]*ordered_map.OrderedMap)
 	for tableName, _ := range rowCopy.NeedRowCopyTableMap {
 		rowCopy.WaitingTagCompletePrirmaryRangeValueMap[tableName] = ordered_map.NewOrderedMap()
 	}
+	logger.M.Infof("成功. 初始化保存 row copy 进度有序map, 每当生成row copy当主键时会将该主键添加到有序map中, 当该row copy完成时, 该主键会从有序map中删除")
 
 	// 初始化 每个表当前消费的最小 和最大 的主键值变量
 	rowCopy.RowCopyConsumeMinMaxValue = make(map[string]sync.Map)
@@ -157,7 +158,7 @@ func NewRowCopy(
 	}
 
 	// 初始化用于传输删除还是添加 需要标记完成的 PrimaryRangeValue
-	rowCopy.AddOrDelWatingTagCompleteChan = make(chan *AddOrDelete, 2*parser.RowCopyHighWaterMark)
+	rowCopy.AddOrDelWatingTagCompleteChan = make(chan *AddOrDelete, 2*runParser.RowCopyHighWaterMark)
 	logger.M.Infof("成功. 初始化添加还是删除需要标记id值的通道")
 
 	// 初始化通知关闭保存 row copy 进度的协程  的通道
@@ -280,12 +281,20 @@ func (this *RowCopy) GeneratePrimaryRangeValue() (bool, error) {
 	// 获取该表当前的 row copy 主键值
 	currPrimaryRangeValue := this.CurrentPrimaryRangeValueMap[tableName]
 	// 获取表的下一个主键方位值
-	nextPrimaryRangeValue, err := currPrimaryRangeValue.GetNextPrimaryRangeValue(this.Parser.RowCopyLimit, this.ConfigMap.Source.Host.String, int(this.ConfigMap.Source.Port.Int64))
+	nextPrimaryRangeValue, err := currPrimaryRangeValue.GetNextPrimaryRangeValueV2(this.Parser.RowCopyLimit, this.ConfigMap.Source.Host.String, int(this.ConfigMap.Source.Port.Int64))
 	if err != nil {
 		return false, fmt.Errorf("row copy 生成表的下一个主键值失败. 停止产生相关表主键值. %v. %v", tableName, err)
 	}
-	logger.M.Infof("成功. 生成主键ID值. 表: %v. 最小值: %v, 最大值: %v, 截止值: %v",
-		tableName, nextPrimaryRangeValue.MinValue, nextPrimaryRangeValue.MaxValue, this.MaxPrimaryRangeValueMap[tableName].MaxValue)
+	logger.M.Infof("成功. 生成主键ID值. 表: %v. 最小值: %v, 最大值: %v, 截止值: %v", tableName, nextPrimaryRangeValue.MinValue, nextPrimaryRangeValue.MaxValue, this.MaxPrimaryRangeValueMap[tableName].MaxValue)
+
+	// 待表已经生成完了, id
+	if nextPrimaryRangeValue == nil {
+		logger.M.Warnf("警告. 检测到表的主键值已经生成到最后了. 该表 row copy 完成. 表: %v: 最小值: %v, 截止值: %v",
+			tableName, currPrimaryRangeValue.MinValue, currPrimaryRangeValue.MaxValue)
+
+		delete(this.NeedRowCopyTableMap, tableName)
+		return false, nil
+	}
 
 	// 比较但前生成的主键范围值的最小值是否 >= row copy 截止的值,
 	if helper.MapAGreaterOrEqualMapB(nextPrimaryRangeValue.MinValue, this.MaxPrimaryRangeValueMap[tableName].MaxValue) {
@@ -294,13 +303,11 @@ func (this *RowCopy) GeneratePrimaryRangeValue() (bool, error) {
 			tableName, nextPrimaryRangeValue.MinValue, this.MaxPrimaryRangeValueMap[tableName].MaxValue)
 
 		delete(this.NeedRowCopyTableMap, tableName)
-
 		return false, nil
 	}
 
 	// 先将该主键值传输给缓存通道中.
-	addOrDelete := NewAddOrDelete(nextPrimaryRangeValue.Schema, nextPrimaryRangeValue.Table,
-		nextPrimaryRangeValue.TimestampHash, AOD_TYPE_ADD, nextPrimaryRangeValue)
+	addOrDelete := NewAddOrDelete(nextPrimaryRangeValue.Schema, nextPrimaryRangeValue.Table, nextPrimaryRangeValue.TimestampHash, AOD_TYPE_ADD, nextPrimaryRangeValue)
 	this.AddOrDelWatingTagCompleteChan <- addOrDelete
 
 	// 将该主键信息传输给消费者

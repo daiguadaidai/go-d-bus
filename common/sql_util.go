@@ -130,8 +130,8 @@ Params:
     _columnNames: 列名
     _sep: 用于join的符号
 */
-func FormatColumnNameStr(_columnNames []string, _sep string) string {
-	return fmt.Sprintf("`%v`", strings.Join(_columnNames, _sep))
+func FormatColumnNameStr(columnNames []string, sep string) string {
+	return fmt.Sprintf("`%v`", strings.Join(columnNames, sep))
 }
 
 /* 通过列名格式化 ORDER BY 字句字段
@@ -158,9 +158,8 @@ Pramas:
     _schemaName: 数据库
     _tableName: 表名
 */
-func FormatTableName(_schemaName string, _tableName string, _warpStr string) string {
-	return fmt.Sprintf("%v%v%v.%v%v%v",
-		_warpStr, _schemaName, _warpStr, _warpStr, _tableName, _warpStr)
+func FormatTableName(schemaName string, tableName string, warpStr string) string {
+	return fmt.Sprintf("%v%v%v.%v%v%v", warpStr, schemaName, warpStr, warpStr, tableName, warpStr)
 }
 
 /* 格式化WHERE字句
@@ -282,70 +281,39 @@ func GetInsertValues(row []interface{}) string {
 	return fmt.Sprintf(placeholderStr, fields...)
 }
 
-func Row2Map(row *sql.Row, columnNames []string, columnTypes []int) (map[string]interface{}, error) {
-	rowMap := make(map[string]interface{})
-	columnLen := len(columnTypes)
-
-	values := make([]interface{}, columnLen)   // 数据库原生二进制值
-	scanArgs := make([]interface{}, columnLen) // 接收数据库原生二进制值，该值和上面定义的values进行关联
-	for i := range values {
-		scanArgs[i] = &values[i]
-	}
-
-	err := row.Scan(scanArgs...)
-	if err != nil {
-		if strings.Contains(err.Error(), "no rows in result set") {
-			return nil, nil
-		}
-
-		return nil, fmt.Errorf("scan 字段数据错误 %v", err)
-	}
-
-	// 开始生成字段数据
-	// 真的是让人摸不着头脑. 有时候 values 是 []int8, 有时候是其他基本类型,如 int, string.
-	// 同样是从数据库中查询出来的. 为啥会这样
-	for i, value := range values {
-		columnData, err := GetColumnData(value, columnTypes[i])
-		if err != nil {
-			return nil, fmt.Errorf("转化字段数据出错 column Name: %v. column type: %v. %v", columnNames[i], columnTypes[i], err)
-		}
-		rowMap[columnNames[i]] = columnData
-	}
-
-	return rowMap, nil
-}
-
 /* 获取数据库字段数据
 Params:
     _value: 查询出来的原始值
     _columnType: 在数据库中的字段类型
 */
-func GetColumnData(_value interface{}, _columnType int) (interface{}, error) {
-	if _value == nil {
+func GetColumnData(value interface{}, columnType int) (interface{}, error) {
+	if value == nil {
 		return nil, nil
 	}
 
 	var strData string
-	switch _value.(type) {
+	switch data := value.(type) {
 	case []uint8, []int8:
-		strData = string(_value.([]uint8))
+		strData = string(value.([]uint8))
 	case string:
-		strData = _value.(string)
+		strData = value.(string)
 	case int:
-		strData = fmt.Sprintf("%v", _value.(int))
+		strData = fmt.Sprintf("%v", value.(int))
 	case int8:
-		strData = fmt.Sprintf("%v", _value.(int8))
+		strData = fmt.Sprintf("%v", value.(int8))
 	case int16:
-		strData = fmt.Sprintf("%v", _value.(int16))
+		strData = fmt.Sprintf("%v", value.(int16))
 	case int32:
-		strData = fmt.Sprintf("%v", _value.(int32))
+		strData = fmt.Sprintf("%v", value.(int32))
 	case int64:
-		strData = fmt.Sprintf("%v", _value.(int64))
+		strData = fmt.Sprintf("%v", value.(int64))
 	case float64:
-		strData = strconv.FormatFloat(_value.(float64), 'E', -1, 64)
+		strData = strconv.FormatFloat(value.(float64), 'E', -1, 64)
+	case sql.RawBytes:
+		strData = string(data)
 	}
 
-	return String2GoValueBySqlType(strData, _columnType)
+	return String2GoValueBySqlType(strData, columnType)
 }
 
 /* 将字符串转化成相应的类型值
