@@ -53,7 +53,7 @@ func (this *RowCopy) GetMaxPrimaryRangeValueMap() (map[string]*matemap.PrimaryRa
 					return nil, nil, fmt.Errorf("失败. 初始化表:%v row copy截止id值. %v", tableName, err)
 				}
 				// 该表没有数据, 不处理, 进行下一个表的row copy 截止ID处理
-				if len(maxPrimaryMap) == 1 {
+				if len(maxPrimaryMap) == 0 {
 					noDataTables[tableName] = true
 					logger.M.Warnf("警告. 该表没有数据, 无法获取到最大主键值. 将设置为row copy 完成. %v", tableName)
 					continue
