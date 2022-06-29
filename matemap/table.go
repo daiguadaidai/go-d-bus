@@ -363,7 +363,8 @@ func (this *Table) InitTargetDropTableSql() {
 // 初始化查询第一条sql  主键/唯一键 值 sql 模板
 func (this *Table) InitSelFirstPKSqlTpl() {
 	selectSql := `
-        /* go-d-bus */ SELECT %v
+        /* go-d-bus */ SELECT /*!40001 SQL_NO_CACHE */
+            %v
         FROM %v
         ORDER BY %v
         LIMIT 1
@@ -384,7 +385,8 @@ func (this *Table) InitSelFirstPKSqlTpl() {
 // 初始化查询最后一条sql  主键/唯一键 值 sql 模板
 func (this *Table) InitSelLastPKSqlTpl() {
 	selectSql := `
-        /* go-d-bus */ SELECT %v
+        /* go-d-bus */ SELECT /*!40001 SQL_NO_CACHE */
+            %v
         FROM %v
         ORDER BY %v
         LIMIT 1
@@ -405,7 +407,8 @@ func (this *Table) InitSelLastPKSqlTpl() {
 // 初始化 每批查询表最大 主键/唯一键 值 sql 模板
 func (this *Table) InitSelPerBatchMaxPKSqlTpl() {
 	selectSql := `
-        /* go-d-bus */ SELECT %v
+        /* go-d-bus */ SELECT /*!40001 SQL_NO_CACHE */
+            %v
         FROM (
             SELECT %v
             FROM %v 
@@ -441,7 +444,8 @@ func (this *Table) InitSelPerBatchMaxPKSqlTpl() {
 // 每批查询获取数据的sql, row copy 所用 sql 模板
 func (this *Table) InitSelPerBatchSqlTpl() {
 	selectSql := `
-        /* go-d-bus */ SELECT %v
+        /* go-d-bus */ SELECT /*!40001 SQL_NO_CACHE */
+            %v
         FROM %v
         WHERE (%v) >= (%v)
             AND (%v) <= (%v)
@@ -467,7 +471,8 @@ func (this *Table) InitSelPerBatchSqlTpl() {
 // 每批查询获取主键值的sql 模板
 func (this *Table) InitSelPerBatchSourcePKSqlTpl() {
 	selectSql := `
-        /* go-d-bus */ SELECT %v
+        /* go-d-bus */ SELECT /*!40001 SQL_NO_CACHE */
+            %v
         FROM %v
         WHERE (%v) >= (%v)
             AND (%v) <= (%v)
@@ -490,7 +495,7 @@ func (this *Table) InitSelPerBatchSourcePKSqlTpl() {
 
 // 初始化 insert ignore into 批量 sql 模板
 func (this *Table) InitInsIgrBatchSqlTpl() {
-	insIgrSql := `/* go-d-bus */ INSERT IGNORE INTO %v(%v) VALUES %v`
+	insIgrSql := `/* go-d-bus */ INSERT LOW_PRIORITY IGNORE INTO %v(%v) VALUES %v`
 
 	// 获取 目标表名
 	tableName := common.FormatTableName(this.TargetSchema, this.TargetName, "`")
@@ -506,7 +511,7 @@ func (this *Table) InitInsIgrBatchSqlTpl() {
 
 // 初始化 replace into 批量 insert 数据 sql 模板
 func (this *Table) InitRepPerBatchSqlTpl() {
-	replaceSql := `/* go-d-bus */ REPLACE INTO %v(%v) VALUES %v`
+	replaceSql := `/* go-d-bus */ REPLACE LOW_PRIORITY INTO %v(%v) VALUES %v`
 
 	// 获取 目标表名
 	tableName := common.FormatTableName(this.TargetSchema, this.TargetName, "`")
@@ -523,7 +528,7 @@ func (this *Table) InitRepPerBatchSqlTpl() {
 // update sql 模板
 func (this *Table) InitUpdSqlTpl() {
 	updateSql := `
-        /* go-d-bus */ UPDATE %v
+        /* go-d-bus */ UPDATE LOW_PRIORITY %v
         SET %v
         WHERE (%v) = (%v)
     `
@@ -547,7 +552,7 @@ func (this *Table) InitUpdSqlTpl() {
 
 // delete sql 模板
 func (this *Table) InitDelSqlTpl() {
-	deleteSql := "/* go-d-bus */ DELETE FROM %v WHERE (%v) = (%v) %v"
+	deleteSql := "/* go-d-bus */ DELETE LOW_PRIORITY FROM %v WHERE (%v) = (%v) %v"
 
 	// 获取 目标表名
 	tableName := common.FormatTableName(this.TargetSchema, this.TargetName, "`")
@@ -581,7 +586,8 @@ WHERE id = xxx
 */
 func (this *Table) InitSelSourceRowChecksumSqlTpl() {
 	selectSql := `
-        /* go-d-bus checksum row source */ SELECT CRC32(CONCAT(
+        /* go-d-bus checksum row source */ SELECT /*!40001 SQL_NO_CACHE */
+        CRC32(CONCAT(
             %v
         ))
         FROM %v
@@ -609,7 +615,8 @@ func (this *Table) InitSelSourceRowChecksumSqlTpl() {
 // 处理方式和 InitSourceRowChecksumTpl 一样
 func (this *Table) InitSelTargetRowChecksumSqlTpl() {
 	selectSql := `
-        /* go-d-bus checksum row target */ SELECT CRC32(CONCAT(
+        /* go-d-bus checksum row target */ SELECT /*!40001 SQL_NO_CACHE */
+        CRC32(CONCAT(
             %v
         ))
         FROM %v
@@ -645,7 +652,8 @@ WHERE id = xxx
 */
 func (this *Table) InitSelSourceRowsChecksumSqlTpl() {
 	selectSql := `
-        /* go-d-bus checksum rows source */ SELECT SUM(CRC32(CONCAT(
+        /* go-d-bus checksum rows source */ SELECT /*!40001 SQL_NO_CACHE */
+        SUM(CRC32(CONCAT(
             %v
         )))
         FROM %v
@@ -675,7 +683,8 @@ func (this *Table) InitSelSourceRowsChecksumSqlTpl() {
 // 处理方式和 InitSourceRowsChecksumTpl 一样
 func (this *Table) InitSelTargetRowsChecksumSqlTpl() {
 	selectSql := `
-        /* go-d-bus checksum row target */ SELECT SUM(CRC32(CONCAT(
+        /* go-d-bus checksum row target */ SELECT /*!40001 SQL_NO_CACHE */
+        SUM(CRC32(CONCAT(
             %v
         )))
         FROM %v
@@ -702,7 +711,8 @@ func (this *Table) InitSelTargetRowsChecksumSqlTpl() {
 // 初始化 通过主键值获取源表数据 sql 模板
 func (this *Table) InitSelSourceRowSqlTpl() {
 	selectSql := `
-        /* go-d-bus */ SELECT %v
+        /* go-d-bus */ SELECT /*!40001 SQL_NO_CACHE */
+            %v
         FROM %v
         WHERE (%v) = (%v)
     `
