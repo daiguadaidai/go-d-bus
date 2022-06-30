@@ -112,6 +112,28 @@ func (this *PrimaryRangeValue) GetMinMaxValueSlice(tablePKNames []string) []inte
 	return minMaxValueSlice
 }
 
+func (this *PrimaryRangeValue) GetNextPrimaryRangeValue(maxRowCnt int, host string, port int) (*PrimaryRangeValue, error) {
+	if this.NextValue == nil {
+		return nil, nil
+	}
+
+	// 按pt-arhive原理获取主键值
+	nextPrimaryRangeValue, err := this.GetNextPrimaryRangeValueTwoRows(maxRowCnt, host, port)
+	if err != nil {
+		return nil, err
+	}
+
+	// 如果按pt原理没有获取到主键值, 说明已经到最后了, 需要再次获取最后一次主键值, 防止最后一次没有值数据会漏掉, 因为pt最后一次LIMIT 1000,2 当没有1000条数据的时候就获取不到主键了
+	if nextPrimaryRangeValue == nil {
+		nextPrimaryRangeValue, err = this.GetLastPrimaryRangeValue(maxRowCnt, host, port)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return nextPrimaryRangeValue, nil
+}
+
 /*获取下一个PrimaryRangeValue
 通过但前主键范围值到数据库中查找
 Params:
@@ -119,8 +141,7 @@ Params:
     host: 链接数据库 ip
     port: 链接数据库端口
 */
-/*
-func (this *PrimaryRangeValue) GetNextPrimaryRangeValue(maxRowCnt int, host string, port int) (*PrimaryRangeValue, error) {
+func (this *PrimaryRangeValue) GetLastPrimaryRangeValue(maxRowCnt int, host string, port int) (*PrimaryRangeValue, error) {
 	// 获取表名
 	tableName := common.FormatTableName(this.Schema, this.Table, "")
 
@@ -133,27 +154,30 @@ func (this *PrimaryRangeValue) GetNextPrimaryRangeValue(maxRowCnt int, host stri
 	// 获取操作相关表的实例
 	instance, ok := gdbc.GetDynamicDBByHostPort(host, int64(port))
 	if !ok {
-		return nil, fmt.Errorf("缓存中不存在该实例(%v:%v). 获取下一个主键范围值. %v", host, port, tableName)
+		return nil, fmt.Errorf("缓存中不存在该实例(%v:%v). 获取最后一个主键范围值. %v", host, port, tableName)
 	}
 
 	// 获取该表的主键名
 	sourceTablePKNames := table.FindSourcePKColumnNames()
 	// 表当前row copy到的范围值的最大值
-	maxValueSlice := this.GetMaxValueSlice(sourceTablePKNames)
+	nextValueSlice := this.GetNextRangeFirstValueSlice(sourceTablePKNames)
 
 	selectSql := table.GetSelPerBatchMaxPKSqlTpl(maxRowCnt)
-	row := instance.QueryRow(selectSql, maxValueSlice...)
-	nextValue, err := daohelper.Row2Map(row, sourceTablePKNames, table.FindSourcePKColumnTypes())
+	row := instance.QueryRow(selectSql, nextValueSlice...)
+	lastValue, err := daohelper.Row2Map(row, sourceTablePKNames, table.FindSourcePKColumnTypes())
 	if err != nil {
-		return nil, fmt.Errorf("失败. 获取表row copy 下一个主键值(row 装换map出错). %v. %v. %v", tableName, err, selectSql)
+		return nil, fmt.Errorf("失败. 获取表row copy 最后一个主键值(row 装换map出错). %v. %v. %v", tableName, err, selectSql)
 	}
-	logger.M.Infof("成功. 获取表 row copy 下一个主键值, %v: %v", tableName, nextValue)
+	if lastValue == nil {
+		logger.M.Warnf("获取最后一次主键范围最大值为空. %v", tableName)
+		return nil, nil
+	}
+	logger.M.Infof("成功. 获取表最后一次 row copy 下一个主键值, %v: %v", tableName, lastValue)
 
-	nextPrimaryRangeValue := NewPrimaryRangeValue("-1", this.Schema, this.Table, this.MaxValue, nextValue)
+	nextPrimaryRangeValue := NewPrimaryRangeValue("-1", this.Schema, this.Table, this.NextValue, lastValue, nil)
 
 	return nextPrimaryRangeValue, nil
 }
-*/
 
 /*获取下一个PrimaryRangeValue
 通过但前主键范围值到数据库中查找
@@ -162,10 +186,7 @@ Params:
     host: 链接数据库 ip
     port: 链接数据库端口
 */
-func (this *PrimaryRangeValue) GetNextPrimaryRangeValueV2(maxRowCnt int, host string, port int) (*PrimaryRangeValue, error) {
-	if this.NextValue == nil {
-		return nil, nil
-	}
+func (this *PrimaryRangeValue) GetNextPrimaryRangeValueTwoRows(maxRowCnt int, host string, port int) (*PrimaryRangeValue, error) {
 
 	// 获取表名
 	tableName := common.FormatTableName(this.Schema, this.Table, "")

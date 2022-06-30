@@ -280,21 +280,20 @@ func (this *RowCopy) GeneratePrimaryRangeValue() (bool, error) {
 
 	// 获取该表当前的 row copy 主键值
 	currPrimaryRangeValue := this.CurrentPrimaryRangeValueMap[tableName]
-	// 获取表的下一个主键方位值
-	nextPrimaryRangeValue, err := currPrimaryRangeValue.GetNextPrimaryRangeValueV2(this.Parser.RowCopyLimit, this.ConfigMap.Source.Host.String, int(this.ConfigMap.Source.Port.Int64))
+	// 获取表的下一个主键范围值
+	nextPrimaryRangeValue, err := currPrimaryRangeValue.GetNextPrimaryRangeValue(this.Parser.RowCopyLimit, this.ConfigMap.Source.Host.String, int(this.ConfigMap.Source.Port.Int64))
 	if err != nil {
 		return false, fmt.Errorf("row copy 生成表的下一个主键值失败. 停止产生相关表主键值. %v. %v", tableName, err)
 	}
-	logger.M.Infof("成功. 生成主键ID值. 表: %v. 最小值: %v, 最大值: %v, 截止值: %v", tableName, nextPrimaryRangeValue.MinValue, nextPrimaryRangeValue.MaxValue, this.MaxPrimaryRangeValueMap[tableName].MaxValue)
 
 	// 待表已经生成完了, id
 	if nextPrimaryRangeValue == nil {
-		logger.M.Warnf("警告. 检测到表的主键值已经生成到最后了. 该表 row copy 完成. 表: %v: 最小值: %v, 截止值: %v",
-			tableName, currPrimaryRangeValue.MinValue, currPrimaryRangeValue.MaxValue)
+		logger.M.Warnf("警告. 检测到表的主键值已经生成到最后了. 该表 row copy 完成. 表: %v: 最小值: %v, 截止值: %v", tableName, currPrimaryRangeValue.MinValue, currPrimaryRangeValue.MaxValue)
 
 		delete(this.NeedRowCopyTableMap, tableName)
 		return false, nil
 	}
+	logger.M.Infof("成功. 生成主键ID值. 表: %v. 最小值: %v, 最大值: %v, 截止值: %v", tableName, nextPrimaryRangeValue.MinValue, nextPrimaryRangeValue.MaxValue, this.MaxPrimaryRangeValueMap[tableName].MaxValue)
 
 	// 比较但前生成的主键范围值的最小值是否 >= row copy 截止的值,
 	if helper.MapAGreaterOrEqualMapB(nextPrimaryRangeValue.MinValue, this.MaxPrimaryRangeValueMap[tableName].MaxValue) {

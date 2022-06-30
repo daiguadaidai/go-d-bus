@@ -367,7 +367,8 @@ func (this *Table) InitTargetDropTableSql() {
 // 初始化查询第一条sql  主键/唯一键 值 sql 模板
 func (this *Table) InitSelFirstPKSqlTpl() {
 	selectSql := `
-        /* go-d-bus */ SELECT %v
+        /* go-d-bus */ SELECT /*!40001 SQL_NO_CACHE */
+            %v
         FROM %v
         ORDER BY %v
         LIMIT 1
@@ -388,7 +389,8 @@ func (this *Table) InitSelFirstPKSqlTpl() {
 // 初始化查询最后一条sql  主键/唯一键 值 sql 模板
 func (this *Table) InitSelLastPKSqlTpl() {
 	selectSql := `
-        /* go-d-bus */ SELECT %v
+        /* go-d-bus */ SELECT /*!40001 SQL_NO_CACHE */
+            %v
         FROM %v
         ORDER BY %v
         LIMIT 1
@@ -409,7 +411,8 @@ func (this *Table) InitSelLastPKSqlTpl() {
 // 初始化 每批查询表最大 主键/唯一键 值 sql 模板
 func (this *Table) InitSelPerBatchMaxPKSqlTpl() {
 	selectSql := `
-        /* go-d-bus */ SELECT %v
+        /* go-d-bus */ SELECT /*!40001 SQL_NO_CACHE */
+            %v
         FROM (
             SELECT %v
             FROM %v 
@@ -735,7 +738,8 @@ func (this *Table) InitSelTargetRowsChecksumSqlTpl() {
 // 初始化 通过主键值获取源表数据 sql 模板
 func (this *Table) InitSelSourceRowSqlTpl() {
 	selectSql := `
-        /* go-d-bus */ SELECT /*!40001 SQL_NO_CACHE */ %v
+        /* go-d-bus */ SELECT /*!40001 SQL_NO_CACHE */
+            %v
         FROM %v
         WHERE (%v) = (%v)
     `
