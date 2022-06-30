@@ -237,3 +237,18 @@ CREATE TABLE `task_run_history` (
   KEY `idx_created_at` (`created_at`),
   KEY `idx_task_uuid` (`task_uuid`)
 ) ENGINE=InnoDB AUTO_INCREMENT=19 DEFAULT CHARSET=utf8mb4 COMMENT='任务启动记录';
+
+CREATE TABLE `binlog_delete_where_external_column` (
+    `id` bigint NOT NULL AUTO_INCREMENT COMMENT '自增ID',
+    `task_uuid` varchar(22) NOT NULL COMMENT '迁移任务UUID',
+    `schema` varchar(100) NOT NULL COMMENT '源 schema 名称',
+    `table` varchar(100) NOT NULL COMMENT '源 table 名称',
+    `source` varchar(100) NOT NULL COMMENT '源 column 名称',
+    `target` varchar(100) NOT NULL COMMENT '目标 column 名称',
+    `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    PRIMARY KEY (`id`),
+    KEY `idx_uuid_tbl_che_src` (`task_uuid`,`schema`,`table`,`source`),
+    KEY `idx_uuid_tbl_che_std` (`task_uuid`,`schema`,`table`,`target`),
+    KEY `created_at` (`created_at`)
+) COMMENT='消费binlog delete where条件而外需要的字段';
