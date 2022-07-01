@@ -28,20 +28,14 @@ Params:
     maxValue: 最大值
 */
 func NewPrimaryRangeValue(
-	timestampHash string,
 	schema string,
 	table string,
 	minValue map[string]interface{},
 	maxValue map[string]interface{},
 	nextValue map[string]interface{},
 ) *PrimaryRangeValue {
-
-	if timestampHash < "0" {
-		timestampHash = common.GetCurrentTimestampMS()
-	}
-
 	return &PrimaryRangeValue{
-		TimestampHash: timestampHash,
+		TimestampHash: common.GetCurrentTimestampMS(),
 		Schema:        schema,
 		Table:         table,
 		MinValue:      minValue,
@@ -174,7 +168,7 @@ func (this *PrimaryRangeValue) GetLastPrimaryRangeValue(maxRowCnt int, host stri
 	}
 	logger.M.Infof("成功. 获取表最后一次 row copy 下一个主键值, %v: %v", tableName, lastValue)
 
-	nextPrimaryRangeValue := NewPrimaryRangeValue("-1", this.Schema, this.Table, this.NextValue, lastValue, nil)
+	nextPrimaryRangeValue := NewPrimaryRangeValue(this.Schema, this.Table, this.NextValue, lastValue, nil)
 
 	return nextPrimaryRangeValue, nil
 }
@@ -229,9 +223,9 @@ func (this *PrimaryRangeValue) GetNextPrimaryRangeValueTwoRows(maxRowCnt int, ho
 	if len(rowMaps) == 0 {
 		return nil, nil
 	} else if len(rowMaps) == 1 {
-		nextPrimaryRangeValue = NewPrimaryRangeValue("-1", this.Schema, this.Table, this.NextValue, rowMaps[0], nil)
+		nextPrimaryRangeValue = NewPrimaryRangeValue(this.Schema, this.Table, this.NextValue, rowMaps[0], nil)
 	} else if len(rowMaps) == 2 {
-		nextPrimaryRangeValue = NewPrimaryRangeValue("-1", this.Schema, this.Table, this.NextValue, rowMaps[0], rowMaps[1])
+		nextPrimaryRangeValue = NewPrimaryRangeValue(this.Schema, this.Table, this.NextValue, rowMaps[0], rowMaps[1])
 	}
 
 	return nextPrimaryRangeValue, nil

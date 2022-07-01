@@ -75,3 +75,9 @@ func TestJson2MapBySqlType(t *testing.T) {
 	}
 	fmt.Println(rs)
 }
+
+func TestGetCurrentTimestampMS(t *testing.T) {
+	for i := 0; i < 10; i++ {
+		fmt.Println(GetCurrentTimestampMS())
+	}
+}

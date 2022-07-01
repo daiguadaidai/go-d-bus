@@ -186,9 +186,8 @@ func GreaterOrEqual(_dataA, _dataB interface{}) bool {
 
 // 获取当前时间戳 毫秒级别
 func GetCurrentTimestampMS() string {
-	t := time.Now()
-
-	return fmt.Sprintf("%v", t.Format("20060102150405123456"))
+	timestamp := time.Now().UnixNano()
+	return strconv.FormatInt(timestamp, 10)
 }
 
 /* string转化称相关类型的值

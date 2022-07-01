@@ -316,9 +316,7 @@ func (this *RowCopy) GeneratePrimaryRangeValue() (bool, error) {
 	this.CurrentPrimaryRangeValueMap[tableName] = nextPrimaryRangeValue
 
 	// 比较新生成的主键值是否 >= 最大的主键值
-	if helper.MapAGreaterOrEqualMapB(nextPrimaryRangeValue.MaxValue,
-		this.MaxPrimaryRangeValueMap[tableName].MaxValue) {
-
+	if helper.MapAGreaterOrEqualMapB(nextPrimaryRangeValue.MaxValue, this.MaxPrimaryRangeValueMap[tableName].MaxValue) {
 		// 新生成的主键值大于 row copy 截止的主键值, 该表从需要迁移的变量中移除
 		logger.M.Infof("完成. 表: %v, 需要迁移的主键值已经全部生成完毕. 要求生成到 %v, 实际生成到 %v",
 			tableName, nextPrimaryRangeValue.MaxValue, this.MaxPrimaryRangeValueMap[tableName].MaxValue)
@@ -482,9 +480,9 @@ func (this *RowCopy) LoopAddOrDeleteCache(wg *sync.WaitGroup) {
 			// 保存最大 row copy 范围值
 			minMaxPrimaryValue.Store("maxValue", maxPrimaryValue)
 
-			// 表还需要row copy +1
+			// 表还需要row copy -1
 			this.RowCopyNoComsumeTimes[tableName]--
-			// 如果该表还需要消费的 row copy 数量为0 则说明, row copy到的最小值和最大值相等
+			// 如果该表还需要消费的 row copy 数量不为0 则说明, row copy到的最小值和最大值相等
 			if this.RowCopyNoComsumeTimes[tableName] == 0 {
 				minMaxPrimaryValue.Store("minValue", maxPrimaryValue)
 			}
@@ -507,7 +505,7 @@ func (this *RowCopy) LoopSaveRowCopyProgress(wg *sync.WaitGroup) {
 	}
 
 	isClose := false
-	ticker := time.NewTicker(time.Second * 5)
+	ticker := time.NewTicker(time.Second * 10)
 	defer ticker.Stop()
 ExistSaveProgress:
 	for {
@@ -516,14 +514,14 @@ ExistSaveProgress:
 			if isClose { // 如果需要关闭则再保存所有表的进度之后再退出, 保存缓存中最大的row copy进度
 				for _, tableName := range tableNames {
 					minMaxPrimaryRangeValue := this.RowCopyConsumeMinMaxValue[tableName]
-					maxData, ok := minMaxPrimaryRangeValue.Load("maxValue")
+					minData, ok := minMaxPrimaryRangeValue.Load("minValue")
 					if !ok {
 						logger.M.Errorf("失败. 保存表 row copy 进度(%v). 没有获取到已经消费的最大范围值. 将跳过该表进度保存", tableName)
 						continue
 					}
 
-					// 获取row copy 最大值
-					maxPrimaryRangeValue := maxData.(*matemap.PrimaryRangeValue)
+					// 获取row copy 最最小值
+					maxPrimaryRangeValue := minData.(*matemap.PrimaryRangeValue)
 					maxValueJson, err := common.Map2Json(maxPrimaryRangeValue.MaxValue)
 					if err != nil {
 						logger.M.Errorf("失败. 保存表row copy 进度(%v). 将进度数据转化为json失败. %v", tableName, err)
@@ -537,7 +535,7 @@ ExistSaveProgress:
 					UpdateTableCurrPrimaryValue(this.ConfigMap.TaskUUID, schema, table, maxValueJson)
 
 					// 标记该表 row copy 完成
-					TagTableRowCopyComplete(this.ConfigMap.TaskUUID, schema, table)
+					// TagTableRowCopyComplete(this.ConfigMap.TaskUUID, schema, table)
 					logger.M.Infof("完成. 标记表 row copy 完成. %v", tableName)
 				}
 
@@ -567,6 +565,17 @@ ExistSaveProgress:
 					schema := schemaTable[0]
 					table := schemaTable[1]
 					UpdateTableCurrPrimaryValue(this.ConfigMap.TaskUUID, schema, table, minValueJson)
+
+					// 获取该表完成时候的 主键直大值
+					// 比较新生成的主键值是否 >= 最大的主键值
+					if helper.MapAGreaterOrEqualMapB(maxPrimaryRangeValue.MaxValue, this.MaxPrimaryRangeValueMap[tableName].MaxValue) {
+						// 标记该表 row copy 完成
+						TagTableRowCopyComplete(this.ConfigMap.TaskUUID, schema, table)
+
+						// 新生成的主键值大于 row copy 截止的主键值, 该表从需要迁移的变量中移除
+						logger.M.Infof("标记表row copy完成 %v. 检测到完成row copy主键最小值 >= 需要row copy最大值. %v >= %v",
+							tableName, maxPrimaryRangeValue.MaxValue, this.MaxPrimaryRangeValueMap[tableName].MaxValue)
+					}
 				}
 			}
 		case <-this.CloseSaveRowCopyProgressChan:

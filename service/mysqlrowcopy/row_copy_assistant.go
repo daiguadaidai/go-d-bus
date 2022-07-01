@@ -70,7 +70,7 @@ func (this *RowCopy) GetMaxPrimaryRangeValueMap() (map[string]*matemap.PrimaryRa
 					return nil, nil, fmt.Errorf("失败. 初始化表row copy截止主键值, 保存到数据库中 %v", tableName)
 				}
 
-				maxPrimaryRangeValueMap[tableName] = matemap.NewPrimaryRangeValue("-1", tableMap.Schema.String, tableMap.Source.String, maxPrimaryMap, maxPrimaryMap, maxPrimaryMap)
+				maxPrimaryRangeValueMap[tableName] = matemap.NewPrimaryRangeValue(tableMap.Schema.String, tableMap.Source.String, maxPrimaryMap, maxPrimaryMap, maxPrimaryMap)
 
 				logger.M.Infof("成功. 初始化row copy 最大主键值. 并保存到数据库中. %v", tableName)
 			} else { // 在 table_map 表中已经有 row copy 截止主键值 max_id_value
@@ -85,7 +85,7 @@ func (this *RowCopy) GetMaxPrimaryRangeValueMap() (map[string]*matemap.PrimaryRa
 					return nil, nil, fmt.Errorf("失败. 初始化表: %v row copy 截止id值. json转化map. %v", tableName, err)
 				}
 
-				maxPrimaryRangeValueMap[tableName] = matemap.NewPrimaryRangeValue("-1", tableMap.Schema.String, tableMap.Source.String, maxPrimaryMap, maxPrimaryMap, maxPrimaryMap)
+				maxPrimaryRangeValueMap[tableName] = matemap.NewPrimaryRangeValue(tableMap.Schema.String, tableMap.Source.String, maxPrimaryMap, maxPrimaryMap, maxPrimaryMap)
 
 				logger.M.Infof("成功. 初始化row copy 最大主键值. 之前已经初始化过. %v", tableName)
 			}
@@ -132,7 +132,7 @@ func (this *RowCopy) GetCurrentPrimaryRangeValueMap() (map[string]*matemap.Prima
 				}
 
 				// 生成但前已经rowcopy 到的范围
-				currentPrimaryRangeValueMap[tableName] = matemap.NewPrimaryRangeValue("-1", tableMap.Schema.String, tableMap.Source.String, currPrimaryMap, currPrimaryMap, currPrimaryMap)
+				currentPrimaryRangeValueMap[tableName] = matemap.NewPrimaryRangeValue(tableMap.Schema.String, tableMap.Source.String, currPrimaryMap, currPrimaryMap, currPrimaryMap)
 
 				logger.M.Infof("成功. 初始化当前row copy主键值. 并保存到数据库中. %v", tableName)
 			} else { // 在 table_map 表中已经有当前已经完成的 row copy 主键值 curr_min_value
@@ -148,7 +148,7 @@ func (this *RowCopy) GetCurrentPrimaryRangeValueMap() (map[string]*matemap.Prima
 				}
 
 				// 生成但前已经rowcopy 到的范围
-				currentPrimaryRangeValueMap[tableName] = matemap.NewPrimaryRangeValue("-1", tableMap.Schema.String, tableMap.Source.String, currPrimaryMap, currPrimaryMap, currPrimaryMap)
+				currentPrimaryRangeValueMap[tableName] = matemap.NewPrimaryRangeValue(tableMap.Schema.String, tableMap.Source.String, currPrimaryMap, currPrimaryMap, currPrimaryMap)
 
 				logger.M.Infof("成功. 初始化当前row copy主键值. 数据库中已经有. %v", tableName)
 			}
