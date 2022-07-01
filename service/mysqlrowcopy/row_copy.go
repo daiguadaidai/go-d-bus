@@ -68,6 +68,8 @@ type RowCopy struct {
 
 	RowCopyNoComsumeTimes map[string]int // 每个表行拷贝还有几个没有消费
 
+	RowCopyCompletedTableMap map[string]struct{} // 已经完成row copy的表
+
 	ToChecksumChan chan *matemap.PrimaryRangeValue // row copy 完成后通知checksum
 
 	// 当所有的 row copy 完成通知可以进行二次checksum
@@ -175,6 +177,9 @@ func NewRowCopy(
 
 	// 初始化row copy 完成通知checksum进行二次checksum
 	rowCopy.NotifySecondChecksum = notifySecondChecksum
+
+	// 初始化已经完成的row copy完成缓存
+	rowCopy.RowCopyCompletedTableMap = make(map[string]struct{})
 
 	return rowCopy, nil
 }
@@ -505,7 +510,7 @@ func (this *RowCopy) LoopSaveRowCopyProgress(wg *sync.WaitGroup) {
 	}
 
 	isClose := false
-	ticker := time.NewTicker(time.Second * 10)
+	ticker := time.NewTicker(time.Second * 5)
 	defer ticker.Stop()
 ExistSaveProgress:
 	for {
@@ -535,7 +540,7 @@ ExistSaveProgress:
 					UpdateTableCurrPrimaryValue(this.ConfigMap.TaskUUID, schema, table, maxValueJson)
 
 					// 标记该表 row copy 完成
-					// TagTableRowCopyComplete(this.ConfigMap.TaskUUID, schema, table)
+					TagTableRowCopyComplete(this.ConfigMap.TaskUUID, schema, table)
 					logger.M.Infof("完成. 标记表 row copy 完成. %v", tableName)
 				}
 
@@ -545,6 +550,11 @@ ExistSaveProgress:
 				break ExistSaveProgress
 			} else { // 保存缓存中最小的 row copy 进度数据
 				for _, tableName := range tableNames {
+					// 已经完成row copy的就不需要再更新了
+					if _, ok := this.RowCopyCompletedTableMap[tableName]; ok {
+						continue
+					}
+
 					minMaxPrimaryRangeValue := this.RowCopyConsumeMinMaxValue[tableName]
 					minData, ok := minMaxPrimaryRangeValue.Load("minValue")
 					if !ok {
@@ -571,6 +581,9 @@ ExistSaveProgress:
 					if helper.MapAGreaterOrEqualMapB(maxPrimaryRangeValue.MaxValue, this.MaxPrimaryRangeValueMap[tableName].MaxValue) {
 						// 标记该表 row copy 完成
 						TagTableRowCopyComplete(this.ConfigMap.TaskUUID, schema, table)
+
+						// 记录该表完成row copy
+						this.RowCopyCompletedTableMap[tableName] = struct{}{}
 
 						// 新生成的主键值大于 row copy 截止的主键值, 该表从需要迁移的变量中移除
 						logger.M.Infof("标记表row copy完成 %v. 检测到完成row copy主键最小值 >= 需要row copy最大值. %v >= %v",

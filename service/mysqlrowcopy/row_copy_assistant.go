@@ -285,9 +285,9 @@ Params:
     _schema: 数据库名
     _table: 表名
 */
-func TagTableRowCopyComplete(_taskUUID, _schema, _table string) int {
+func TagTableRowCopyComplete(taskUUID, schema, table string) int {
 	tableMapDao := new(dao.TableMapDao)
-	affected := tableMapDao.TagTableRowCopyComplete(_taskUUID, _schema, _table)
+	affected := tableMapDao.TagTableRowCopyComplete(taskUUID, schema, table)
 	return affected
 }
 
@@ -295,9 +295,9 @@ func TagTableRowCopyComplete(_taskUUID, _schema, _table string) int {
 Params:
     _taskUUID: 任务ID
 */
-func TagTaskRowCopyComplete(_taskUUID string) int {
+func TagTaskRowCopyComplete(taskUUID string) int {
 	taskDao := new(dao.TaskDao)
-	affected := taskDao.TagTaskRowCopyComplete(_taskUUID)
+	affected := taskDao.TagTaskRowCopyComplete(taskUUID)
 	return affected
 }
 
@@ -410,9 +410,9 @@ func InsertRowCopyData_V2(host string, port int, schema string, tableName string
 Params:
 	_taskUUID: 任务ID
 */
-func TaskRowCopyIsComplete(_taskUUID string) (bool, error) {
+func TaskRowCopyIsComplete(taskUUID string) (bool, error) {
 	taskDao := new(dao.TaskDao)
-	isComplete, err := taskDao.TaskRowCopyIsComplete(_taskUUID)
+	isComplete, err := taskDao.TaskRowCopyIsComplete(taskUUID)
 
 	return isComplete, err
 }
