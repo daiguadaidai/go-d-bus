@@ -485,7 +485,7 @@ func (this *ApplyBinlog) ConsumeEevetRows(wg *sync.WaitGroup, slot int) {
 						logger.M.Fatalf("协程 %v. 发生错误超过上线: %v次. 退出迁移. %v", slot, errCNT, err)
 						// syscall.Exit(1)
 					}
-					logger.M.Errorf("协程 %v. 应用数据错误, 第%v次错误. %v", slot, errCNT, err)
+					logger.M.Errorf("协程 %v. 应用数据错误, 第%v/%v次错误. %v", slot, errCNT, this.Parser.ErrRetryCount, err)
 					time.Sleep(time.Second)
 					continue
 				}
@@ -497,7 +497,7 @@ func (this *ApplyBinlog) ConsumeEevetRows(wg *sync.WaitGroup, slot int) {
 						logger.M.Fatalf("协程 %v. 发生错误超过上线: %v次. 退出迁移. %v", slot, errCNT, err)
 						// syscall.Exit(1)
 					}
-					logger.M.Errorf("协程 %v. 应用数据错误, 第%v次错误. %v", slot, errCNT, err)
+					logger.M.Errorf("协程 %v. 应用数据错误, 第%v/%v次错误. %v", slot, errCNT, this.Parser.ErrRetryCount, err)
 					time.Sleep(time.Second)
 					continue
 				}
@@ -509,7 +509,7 @@ func (this *ApplyBinlog) ConsumeEevetRows(wg *sync.WaitGroup, slot int) {
 						logger.M.Fatalf("%v: 协程 %v. 发生错误超过上线: %v次. 退出迁移. %v", slot, errCNT, err)
 						// syscall.Exit(1)
 					}
-					logger.M.Errorf("协程 %v. 应用数据错误, 第%v次错误. %v", slot, errCNT, err)
+					logger.M.Errorf("协程 %v. 应用数据错误, 第%v/%v次错误. %v", slot, errCNT, this.Parser.ErrRetryCount, err)
 					time.Sleep(time.Second)
 					continue
 				}
