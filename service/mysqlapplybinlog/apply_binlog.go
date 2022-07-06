@@ -469,11 +469,11 @@ func (this *ApplyBinlog) DistributeDeleteEventRows(_binlogEventPos *BinlogEventP
 Params:
 	_slot: 通道号
 */
-func (this *ApplyBinlog) ConsumeEevetRows(wg *sync.WaitGroup, _slot int) {
+func (this *ApplyBinlog) ConsumeEevetRows(wg *sync.WaitGroup, slot int) {
 	defer wg.Done()
-	logger.M.Infof("协程 %v. 开始应用每一行.", _slot)
+	logger.M.Infof("协程 %v. 开始应用每一行.", slot)
 
-	for binlogRowInfo := range this.Distribute2ApplyChans[_slot] {
+	for binlogRowInfo := range this.Distribute2ApplyChans[slot] {
 		errCNT := 0
 		for {
 			switch binlogRowInfo.EventType {
@@ -482,10 +482,10 @@ func (this *ApplyBinlog) ConsumeEevetRows(wg *sync.WaitGroup, _slot int) {
 				if err != nil {
 					errCNT++
 					if errCNT > this.Parser.ErrRetryCount {
-						logger.M.Fatalf("协程 %v. 发生错误超过上线: %v次. 退出迁移. %v", _slot, errCNT, err)
+						logger.M.Fatalf("协程 %v. 发生错误超过上线: %v次. 退出迁移. %v", slot, errCNT, err)
 						// syscall.Exit(1)
 					}
-					logger.M.Errorf("协程 %v. 应用数据错误, 第%v次错误. %v", _slot, errCNT, err)
+					logger.M.Errorf("协程 %v. 应用数据错误, 第%v次错误. %v", slot, errCNT, err)
 					time.Sleep(time.Second)
 					continue
 				}
@@ -494,10 +494,10 @@ func (this *ApplyBinlog) ConsumeEevetRows(wg *sync.WaitGroup, _slot int) {
 				if err != nil {
 					errCNT++
 					if errCNT > this.Parser.ErrRetryCount {
-						logger.M.Fatalf("协程 %v. 发生错误超过上线: %v次. 退出迁移. %v", _slot, errCNT, err)
+						logger.M.Fatalf("协程 %v. 发生错误超过上线: %v次. 退出迁移. %v", slot, errCNT, err)
 						// syscall.Exit(1)
 					}
-					logger.M.Errorf("协程 %v. 应用数据错误, 第%v次错误. %v", _slot, errCNT, err)
+					logger.M.Errorf("协程 %v. 应用数据错误, 第%v次错误. %v", slot, errCNT, err)
 					time.Sleep(time.Second)
 					continue
 				}
@@ -506,10 +506,10 @@ func (this *ApplyBinlog) ConsumeEevetRows(wg *sync.WaitGroup, _slot int) {
 				if err != nil {
 					errCNT++
 					if errCNT > this.Parser.ErrRetryCount {
-						logger.M.Fatalf("%v: 协程 %v. 发生错误超过上线: %v次. 退出迁移. %v", _slot, errCNT, err)
+						logger.M.Fatalf("%v: 协程 %v. 发生错误超过上线: %v次. 退出迁移. %v", slot, errCNT, err)
 						// syscall.Exit(1)
 					}
-					logger.M.Errorf("协程 %v. 应用数据错误, 第%v次错误. %v", _slot, errCNT, err)
+					logger.M.Errorf("协程 %v. 应用数据错误, 第%v次错误. %v", slot, errCNT, err)
 					time.Sleep(time.Second)
 					continue
 				}
@@ -571,19 +571,19 @@ func (this *ApplyBinlog) ConsumeUpdateRows(binlogRowInfo *BinlogRowInfo) error {
 		// 删除数据
 		err := this.ConsumeDeleteRows(binlogRowInfo)
 		if err != nil {
-			return fmt.Errorf("消费update行, update 转化为 delete/insert(delete). %v", err)
+			return fmt.Errorf("消费update行, update 转化为 delete/replace into(delete). %v", err)
 		}
 
 		// 插入数据
 		err = this.ConsumeInsertRows(binlogRowInfo)
 		if err != nil {
-			return fmt.Errorf("消费update行, update 转化为 delete/insert(insert). %v", err)
+			return fmt.Errorf("消费update行, update 转化为 delete/replace into(replace into). %v", err)
 		}
 	} else { // 如果唯一键列值没有修改. 则变成insert
 		// 插入数据
 		err = this.ConsumeInsertRows(binlogRowInfo)
 		if err != nil {
-			return fmt.Errorf("消费update行, update 转化为 insert. %v", err)
+			return fmt.Errorf("消费update行, update 转化为 replace into. %v", err)
 		}
 	}
 
