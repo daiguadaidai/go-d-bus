@@ -549,7 +549,7 @@ func (this *ApplyBinlog) ConsumeInsertRows(binlogRowInfo *BinlogRowInfo) error {
 	replaceIntoSql := table.GetRepPerBatchSqlTpl_V2(rows)
 	_, err = instance.Exec(replaceIntoSql)
 	if err != nil {
-		return err
+		return fmt.Errorf("%v. %v", err.Error(), replaceIntoSql)
 	}
 
 	return nil
@@ -615,7 +615,7 @@ func (this *ApplyBinlog) ConsumeDeleteRows(binlogRowInfo *BinlogRowInfo) error {
 	// 开启事物执行sql
 	_, err = instance.Exec(deleteSql)
 	if err != nil {
-		return err
+		return fmt.Errorf("%v. %v", err.Error(), deleteSql)
 	}
 
 	return nil
