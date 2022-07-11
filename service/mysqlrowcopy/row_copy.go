@@ -135,9 +135,9 @@ func NewRowCopy(
 	logger.M.Infof("成功. 初始化需要迁移的表当前row copy到的主键值. 没有数据的表: %v", currNoDataTables)
 
 	// 如果表的当前 row copy 到的主键值 >= 表 row copy 截止的 主键值
-	greaterTables := rowCopy.FindCurrGreaterMaxPrimaryTables()
-	rowCopy.TagCompleteNeedRowCopyTables(greaterTables) // 将当前rowcopy的值 >= 截止的rowcopy表直接标记完成
-	logger.M.Infof("成功. 过滤需要迁移的表中 当前ID >= 截止ID 的表有: %v", greaterTables)
+	// greaterTables := rowCopy.FindCurrGreaterMaxPrimaryTables()
+	// rowCopy.TagCompleteNeedRowCopyTables(greaterTables) // 将当前rowcopy的值 >= 截止的rowcopy表直接标记完成
+	// logger.M.Infof("成功. 过滤需要迁移的表中 当前ID >= 截止ID 的表有: %v", greaterTables)
 
 	// 初始化每个表已经完成到的主键范围值 map: {"schema.table": PrimaryRangeValue}
 	// 初始化的时候 已经完成的row copy 范围和 当前需要进行 row copy 的是一样的
@@ -301,7 +301,7 @@ func (this *RowCopy) GeneratePrimaryRangeValue() (bool, error) {
 	logger.M.Infof("成功. 生成主键ID值. 表: %v. 最小值: %v, 最大值: %v, 截止值: %v", tableName, nextPrimaryRangeValue.MinValue, nextPrimaryRangeValue.MaxValue, this.MaxPrimaryRangeValueMap[tableName].MaxValue)
 
 	// 比较但前生成的主键范围值的最小值是否 >= row copy 截止的值,
-	if helper.MapAGreaterOrEqualMapB(nextPrimaryRangeValue.MinValue, this.MaxPrimaryRangeValueMap[tableName].MaxValue) {
+	if helper.MapAGreaterMapB(nextPrimaryRangeValue.MinValue, this.MaxPrimaryRangeValueMap[tableName].MaxValue) {
 		// 新生成的主键值 的最小值 大于 row copy 截止的主键值, 该表从需要迁移的变量中移除
 		logger.M.Warnf("警告. 检测到新生成的主键范围值的最小值 >= row copy 截止的主键值. 该新生成的主键值不要进行 row copy, 标记该表已经row copy 完成. 表: %v: 最小值: %v, 截止值: %v",
 			tableName, nextPrimaryRangeValue.MinValue, this.MaxPrimaryRangeValueMap[tableName].MaxValue)

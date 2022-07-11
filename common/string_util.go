@@ -184,6 +184,75 @@ func GreaterOrEqual(_dataA, _dataB interface{}) bool {
 	return false
 }
 
+/* 比较 _dataA 是否小于 _dataB
+Params:
+    _dataA: 第一个值
+    _dataB: 第二个值
+*/
+func Greater(_dataA, _dataB interface{}) bool {
+	switch valueA := _dataA.(type) {
+	case string:
+		valueB := _dataB.(string)
+		return valueA > valueB
+	case int8:
+		valueB := _dataB.(int8)
+		return valueA > int8(valueB)
+	case int16:
+		valueB := _dataB.(int16)
+		return valueA > valueB
+	case int32:
+		valueB := _dataB.(int32)
+		return valueA > valueB
+	case int:
+		valueB := _dataB.(int)
+		return valueA > valueB
+	case int64:
+		valueB := _dataB.(int64)
+		return valueA > valueB
+	case uint8:
+		valueB := _dataB.(uint8)
+		return valueA > valueB
+	case uint16:
+		valueB := _dataB.(uint16)
+		return valueA > valueB
+	case uint32:
+		valueB := _dataB.(uint32)
+		return valueA > valueB
+	case uint:
+		valueB := _dataB.(uint)
+		return valueA > valueB
+	case uint64:
+		valueB := _dataB.(uint64)
+		return valueA > valueB
+	case float32:
+		valueB := _dataB.(float32)
+		return valueA > valueB
+	case float64:
+		valueB := _dataB.(float64)
+		return valueA > valueB
+	case complex64:
+		valueB := _dataB.(complex64)
+		if real(valueA) > real(valueB) && imag(valueA) >= imag(valueB) {
+			return true
+		} else if real(valueA) > real(valueB) && imag(valueA) > imag(valueB) {
+			return true
+		} else {
+			return false
+		}
+	case complex128:
+		valueB := _dataB.(complex128)
+		if real(valueA) > real(valueB) && imag(valueA) >= imag(valueB) {
+			return true
+		} else if real(valueA) > real(valueB) && imag(valueA) > imag(valueB) {
+			return true
+		} else {
+			return false
+		}
+	}
+
+	return false
+}
+
 // 获取当前时间戳 毫秒级别
 func GetCurrentTimestampMS() string {
 	timestamp := time.Now().UnixNano()
