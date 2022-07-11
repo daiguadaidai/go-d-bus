@@ -291,3 +291,34 @@ func String2ValueByType(_value string, _type int) (interface{}, error) {
 
 	return -1, fmt.Errorf("失败. 转化数据库字段信息出错遇到未知类型")
 }
+
+func Unicode2utf8(source string) string {
+	var res = []string{""}
+	sUnicode := strings.Split(source, "\\u")
+
+	if len(sUnicode) <= 1 {
+		return source
+	}
+
+	var context = ""
+	for _, v := range sUnicode {
+		var additional = ""
+		if len(v) < 1 {
+			continue
+		}
+		if len(v) > 4 {
+			rs := []rune(v)
+			v = string(rs[:4])
+			additional = string(rs[4:])
+		}
+		charInt, err := strconv.ParseInt(v, 16, 32)
+		if err != nil {
+			context += v
+		} else {
+			context += fmt.Sprintf("%c", charInt)
+		}
+		context += additional
+	}
+	res = append(res, context)
+	return strings.Join(res, "")
+}
