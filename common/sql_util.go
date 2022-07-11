@@ -254,7 +254,7 @@ func FormatValuesPlaceholder_V2(rows [][]interface{}) string {
 	for _, row := range rows {
 		rowStr := GetInsertValues(row)
 		rowStr = strings.ReplaceAll(rowStr, "'", "\\'")
-		rowStr = Unicode2utf8(rowStr)
+		rowStr = Unicode2Utf8(rowStr)
 		rowStrs = append(rowStrs, rowStr)
 	}
 

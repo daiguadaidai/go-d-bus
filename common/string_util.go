@@ -292,33 +292,67 @@ func String2ValueByType(_value string, _type int) (interface{}, error) {
 	return -1, fmt.Errorf("失败. 转化数据库字段信息出错遇到未知类型")
 }
 
-func Unicode2utf8(source string) string {
-	var res = []string{""}
+func Unicode2Utf8(source string) string {
 	sUnicode := strings.Split(source, "\\u")
-
 	if len(sUnicode) <= 1 {
 		return source
 	}
+	firstStr := sUnicode[0]
+	res := make([]string, 0, len(sUnicode))
+	res = append(res, firstStr)
 
-	var context = ""
-	for _, v := range sUnicode {
+	// 获取上一哥字符串的最后一个字符
+	var beforeStrASCII92Count int
+	if len(firstStr) > 0 {
+		beforeStrASCII92Count = reverseGetASCII92Count([]byte(firstStr))
+	}
+
+	for _, v := range sUnicode[1:] {
 		var additional = ""
+
 		if len(v) < 1 {
 			continue
 		}
-		if len(v) > 4 {
-			rs := []rune(v)
-			v = string(rs[:4])
-			additional = string(rs[4:])
-		}
-		charInt, err := strconv.ParseInt(v, 16, 32)
-		if err != nil {
-			context += v
+
+		// 本次字符串最后一个字符
+		currStrASCII92Count := reverseGetASCII92Count([]byte(v))
+
+		if beforeStrASCII92Count%2 != 0 { // '\' 奇数个数则需要解析 unicode
+			res = append(res, "\\u", v)
 		} else {
-			context += fmt.Sprintf("%c", charInt)
+			if len(v) > 4 {
+				rs := []rune(v)
+				v = string(rs[:4])
+				additional = string(rs[4:])
+			}
+			temp, err := strconv.ParseInt(v, 16, 32)
+			if err != nil {
+				res = append(res, "\\u", v)
+			} else {
+				res = append(res, fmt.Sprintf("%c", temp))
+			}
 		}
-		context += additional
+		res = append(res, additional)
+		beforeStrASCII92Count = currStrASCII92Count
 	}
-	res = append(res, context)
+
 	return strings.Join(res, "")
+}
+
+// 反向获取连续 ASCII 为 92(\) 的个数
+func reverseGetASCII92Count(bytes []byte) int {
+	if len(bytes) == 0 {
+		return 0
+	}
+
+	var cnt int
+	for i := len(bytes) - 1; i >= 0; i-- {
+		if bytes[i] == '\\' {
+			cnt++
+		} else {
+			break
+		}
+	}
+
+	return cnt
 }
