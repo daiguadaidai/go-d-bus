@@ -865,9 +865,18 @@ func (this *Table) GetInsIgrBatchSqlTpl_V2(rows [][]interface{}) string {
 	return fmt.Sprintf(this.insIgrBatchSqlTpl, valuesPlaceholder)
 }
 
-/* 获取 replace into sql 模板
+func (this *Table) GetInsIgrBatchSqlTpl_V3(rows [][]interface{}) (string, error) {
+	valuesPlaceholder, err := common.FormatValuesPlaceholder_V3(rows)
+	if err != nil {
+		return "", err
+	}
+
+	return fmt.Sprintf(this.insIgrBatchSqlTpl, valuesPlaceholder), nil
+}
+
+/* 获取 replace into sql
 Params:
-    _rowCount: 行数
+    rowCount: 行数
 */
 func (this *Table) GetRepPerBatchSqlTpl(rowCount int) string {
 	valuesPlaceholder := common.FormatValuesPlaceholder(len(this.SourceUsefulColumns), rowCount)
@@ -875,14 +884,23 @@ func (this *Table) GetRepPerBatchSqlTpl(rowCount int) string {
 	return fmt.Sprintf(this.repPerBatchSqlTpl, valuesPlaceholder)
 }
 
-/* 获取 replace into sql 模板
-Params:
-    _rowCount: 行数
-*/
+/* 获取 replace into sql
+ */
 func (this *Table) GetRepPerBatchSqlTpl_V2(rows [][]interface{}) string {
 	valuesPlaceholder := common.FormatValuesPlaceholder_V2(rows)
 
 	return fmt.Sprintf(this.repPerBatchSqlTpl, valuesPlaceholder)
+}
+
+/* 获取 replace into sql
+ */
+func (this *Table) GetRepPerBatchSqlTpl_V3(rows [][]interface{}) (string, error) {
+	valuesPlaceholder, err := common.FormatValuesPlaceholder_V3(rows)
+	if err != nil {
+		return "", err
+	}
+
+	return fmt.Sprintf(this.repPerBatchSqlTpl, valuesPlaceholder), nil
 }
 
 //  获取 update 语句

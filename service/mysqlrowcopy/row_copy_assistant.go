@@ -390,7 +390,10 @@ func InsertRowCopyData_V2(host string, port int, schema string, tableName string
 	}
 
 	// 获取执行sql
-	insertSql := table.GetInsIgrBatchSqlTpl_V2(rows)
+	insertSql, err := table.GetInsIgrBatchSqlTpl_V3(rows)
+	if err != nil {
+		return fmt.Errorf("Row Copy, 获取Insert Ignore SQL失败. %v", err.Error())
+	}
 
 	// 获取实例
 	instance, ok := gdbc.GetDynamicDBByHostPort(host, int64(port))

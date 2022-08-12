@@ -356,3 +356,62 @@ func reverseGetASCII92Count(bytes []byte) int {
 
 	return cnt
 }
+
+/*
+data: 源数据
+warpStr: 最后元数据需要使用什么包括
+如: data: aabb, wrapStr: '
+最后: 'aabb'
+*/
+func GetSqlStrValue(data string, wrapStr string) (string, error) {
+	oriStrRunes := []rune(data)
+
+	var sb strings.Builder
+	// 添加开头单引号
+	_, err := fmt.Fprint(&sb, wrapStr)
+	if err != nil {
+		return "", err
+	}
+	for _, oriStrRune := range oriStrRunes {
+		var s string
+
+		switch oriStrRune {
+		case 34: // " 双引号
+			s = "\\\""
+		case 39: // ' 单引号
+			s = "\\'"
+		case 92: // \ 反斜杠
+			s = "\\\\"
+		default:
+			s = string(oriStrRune)
+		}
+
+		_, err := fmt.Fprint(&sb, s)
+		if err != nil {
+			return "", err
+		}
+	}
+
+	// 添加结尾单引号
+	_, err = fmt.Fprint(&sb, wrapStr)
+	if err != nil {
+		return "", err
+	}
+
+	return sb.String(), nil
+}
+
+/*
+data: 源数据
+warpStr: 最后元数据需要使用什么包括, 如果不是string类型不会使用到这个参数
+如: data: aabb, wrapStr: '
+最后: 'aabb'
+*/
+func GetSqlValue(data interface{}, wrapStr string) (interface{}, error) {
+	switch v := data.(type) {
+	case string:
+		return GetSqlStrValue(v, wrapStr)
+	}
+
+	return data, nil
+}

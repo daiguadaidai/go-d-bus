@@ -244,9 +244,6 @@ func FormatValuesPlaceholder(columnLenth int, rowCount int) string {
 
 /* 获取 Insert 语句的 在为符
 (1, "name", "name2"), (1, "name", "name2")
-Params:
-    _columnLenth: 列的个数
-    _rowCount: 需要多少行
 */
 func FormatValuesPlaceholder_V2(rows [][]interface{}) string {
 
@@ -259,6 +256,23 @@ func FormatValuesPlaceholder_V2(rows [][]interface{}) string {
 	}
 
 	return strings.Join(rowStrs, ", ")
+}
+
+/* 获取 Insert 语句的 在为符
+(1, 'name', 'name2'), (1, 'name', 'name2')
+*/
+func FormatValuesPlaceholder_V3(rows [][]interface{}) (string, error) {
+
+	rowStrs := make([]string, 0, len(rows))
+	for _, row := range rows {
+		rowStr, err := GetInsertValues_V3(row)
+		if err != nil {
+			return "", err
+		}
+		rowStrs = append(rowStrs, rowStr)
+	}
+
+	return strings.Join(rowStrs, ", "), nil
 }
 
 /* 获取 Insert 语句的一行数据的values
@@ -280,6 +294,33 @@ func GetInsertValues(row []interface{}) string {
 	placeholderStr := fmt.Sprintf("(%v)", strings.Join(placeholders, ", "))
 
 	return fmt.Sprintf(placeholderStr, fields...)
+}
+
+/* 获取 Insert 语句的一行数据的values
+(1, 'name', 'name2')
+*/
+func GetInsertValues_V3(row []interface{}) (string, error) {
+	placeholders := make([]string, 0, len(row))
+	fields := make([]interface{}, 0, len(row))
+
+	for _, field := range row {
+		if field == nil {
+			placeholders = append(placeholders, "NULL")
+		} else {
+			placeholders = append(placeholders, "%v")
+
+			// 获取字段值
+			value, err := GetSqlValue(field, "'")
+			if err != nil {
+				return "", err
+			}
+			fields = append(fields, value)
+		}
+	}
+
+	placeholderStr := fmt.Sprintf("(%v)", strings.Join(placeholders, ", "))
+
+	return fmt.Sprintf(placeholderStr, fields...), nil
 }
 
 /* 获取数据库字段数据
