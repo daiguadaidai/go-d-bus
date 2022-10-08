@@ -266,7 +266,7 @@ func ReplaceTargetRow(host string, port int, sourceRow []interface{}, table *mat
 		return fmt.Errorf("缓存中不存在该实例(%v:%v). 通过主键 repalce into 目标行", host, port)
 	}
 
-	replaceIntoSql, err := table.GetRepPerBatchSqlTpl_V3([][]interface{}{sourceRow})
+	replaceIntoSql, err := table.GetInsOnDupUpdateBatchSqlTpl_V3([][]interface{}{sourceRow})
 	if err != nil {
 		return fmt.Errorf("Checksum 获取replace into sql 出错. %v", err.Error())
 	}

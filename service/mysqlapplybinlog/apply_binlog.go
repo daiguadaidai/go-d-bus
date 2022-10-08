@@ -546,7 +546,7 @@ func (this *ApplyBinlog) ConsumeInsertRows(binlogRowInfo *BinlogRowInfo) error {
 
 	rows := [][]interface{}{afterRow}
 	// 开启事物执行sql
-	replaceIntoSql, err := table.GetRepPerBatchSqlTpl_V3(rows)
+	replaceIntoSql, err := table.GetInsOnDupUpdateBatchSqlTpl_V3(rows)
 	if err != nil {
 		return fmt.Errorf("应用binlog, 获取Replace Into sql失败. %v", err.Error())
 	}

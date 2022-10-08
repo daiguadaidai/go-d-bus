@@ -133,6 +133,20 @@ Params:
 func FormatColumnNameStr(columnNames []string, sep string) string {
 	return fmt.Sprintf("`%v`", strings.Join(columnNames, sep))
 }
+func GetInsertOnDupUpdateColumnValueStr(columnNames []string) string {
+	columnValueStrs := GetInsertOnDupUpdateColumnValueStrs(columnNames)
+	return strings.Join(columnValueStrs, ", ")
+}
+
+func GetInsertOnDupUpdateColumnValueStrs(columnNames []string) []string {
+	columnValues := make([]string, 0, len(columnNames))
+	for _, columnName := range columnNames {
+		columnValue := fmt.Sprintf("`%v` = values(`%v`)", columnName, columnName)
+		columnValues = append(columnValues, columnValue)
+	}
+
+	return columnValues
+}
 
 /* 通过列名格式化 ORDER BY 字句字段
 [a, b, c] -> `a` ASC, `b` ASC, `c` ASC

@@ -41,6 +41,7 @@ type Table struct {
 	selPerBatchSqlTpl         string // 每批查询获取数据的sql, row copy 所用 sql 模板
 	insIgrBatchSqlTpl         string // insert ignore into 批量 sql 模板
 	repPerBatchSqlTpl         string // replace into 批量 insert 数据 sql 模板
+	insOnDupUpdateBatchSqlTpl string // insert into values() on duplicate update
 	updSqlTpl                 string // update sql 模板
 	delSqlTpl                 string // delete sql 模板
 	selSourceRowCheckSqlTpl   string // 源实例 单行 checksum sql 模板
@@ -328,6 +329,9 @@ func (this *Table) InitALLSqlTpl() {
 	// 初始化 replace into 批量 insert 数据 sql 模板
 	this.InitRepPerBatchSqlTpl()
 
+	// 初始化 insert into tbl(id, name, ...) values() ON DUPLICATE KEY UPDATE id = values(id), names = values(name)...
+	this.InitInsOnDupUpdateBatchSqlTpl()
+
 	// update sql 模板
 	this.InitUpdSqlTpl()
 
@@ -550,6 +554,24 @@ func (this *Table) InitRepPerBatchSqlTpl() {
 	valuesStr := "%v"
 
 	this.repPerBatchSqlTpl = fmt.Sprintf(replaceSql, tableName, fieldsStr, valuesStr)
+}
+
+// 初始化 insert into tbl() values() ON DUPLICATE KEY UPDATE id = values(id);
+func (this *Table) InitInsOnDupUpdateBatchSqlTpl() {
+	insIgrSql := `/* go-d-bus */ INSERT LOW_PRIORITY INTO %v(%v) VALUES %v ON DUPLICATE KEY UPDATE %v`
+
+	// 获取 目标表名
+	tableName := common.FormatTableName(this.TargetSchema, this.TargetName, "`")
+	// 获取需要迁移的字段名称
+	targetUsefulColumnNames := this.FindTargetUsefulColumnNames()
+	// 获取目标所有需要迁移的字段 字符串
+	fieldsStr := common.FormatColumnNameStr(targetUsefulColumnNames, "`, `")
+	// values 之后的值, 这个值主要后面需要变成占位符, 所以先使用 %v 代替
+	valuesStr := "%v"
+	// 获取 ON DUPLICATE KEY UPDATE 中的    id = values(id), name = values(name)    字符串
+	updateColumnValueStr := common.GetInsertOnDupUpdateColumnValueStr(targetUsefulColumnNames)
+
+	this.insOnDupUpdateBatchSqlTpl = fmt.Sprintf(insIgrSql, tableName, fieldsStr, valuesStr, updateColumnValueStr)
 }
 
 // update sql 模板
@@ -901,6 +923,15 @@ func (this *Table) GetRepPerBatchSqlTpl_V3(rows [][]interface{}) (string, error)
 	}
 
 	return fmt.Sprintf(this.repPerBatchSqlTpl, valuesPlaceholder), nil
+}
+
+func (this *Table) GetInsOnDupUpdateBatchSqlTpl_V3(rows [][]interface{}) (string, error) {
+	valuesPlaceholder, err := common.FormatValuesPlaceholder_V3(rows)
+	if err != nil {
+		return "", err
+	}
+
+	return fmt.Sprintf(this.insOnDupUpdateBatchSqlTpl, valuesPlaceholder), nil
 }
 
 //  获取 update 语句
